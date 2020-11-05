@@ -7,9 +7,24 @@ pip install airflow-ecs-fargate-executor
 ```
 
 ## Getting Started
+
+In your `$AIRFLOW_HOME/plugins` folder create a file called `ecs_fargate_plugin.py`.
+
+```python
+from airflow.plugins_manager import AirflowPlugin
+from airflow_ecs_fargate_executor import EcsFargateExecutor
+
+
+class EcsFargatePlugin(AirflowPlugin):
+    """AWS ECS & AWS FARGATE Plugin"""
+    name = "aws_ecs_plugin"
+    executors = [EcsFargateExecutor]
+```
+
 For more information on any of these execution parameters, see the link below: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.run_task
 
 For boto3 credential management, see https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html
+
 
 ## How It Works
 Everytime Apache Airflow wants to run a task, this executor will use Boto3's [ECS.run_task()]() function to schedule a container on an existing cluster. Then every scheduler heartbeat the executor will check the status of every running container, and sync it with Airflow.
@@ -29,15 +44,15 @@ If you're on the Fargate executor it may take 4 minutes for a task to pop up, bu
 
 I almost always recommend that you go the AWS Fargate route unless you need the custom flexibility provided by ECS.
 
-|                   | ECS                                                           | Fargate                                |
-|-------------------|---------------------------------------------------------------|----------------------------------------|
-| Start-up per task | Instantaneous if machine available                            | 2-4 minutes per task                   |
-| Maintenance       | You patch the own, operate, and patch                         | Serverless                             |
-| Capacity          | Depends on number of machines with available space in cluster | ~2000 containers. See AWS Limits       |
-| Flexibility       | High                                                          | Low                                    |
+|                   | ECS                                                           | Fargate                                 |
+|-------------------|---------------------------------------------------------------|-----------------------------------------|
+| Start-up per task | Instantaneous if capacity available                           | 2-4 minutes per task; O(1) constant time|
+| Maintenance       | You patch the own, operate, and patch                         | Serverless                              |
+| Capacity          | Depends on number of machines with available space in cluster | ~2000 containers. See AWS Limits        |
+| Flexibility       | High                                                          | Low                                     |
 
 ### Airflow Configurations
-
+`[ecs_fargate]`
 * `region` 
     * **description**: The name of AWS Region
     * **mandatory**: even with a custom run_task_template
@@ -72,6 +87,11 @@ I almost always recommend that you go the AWS Fargate route unless you need the 
     * **mandatory**: even with a custom run_task_template
     * **default**: default_aws_ecs.DEFAULT_AWS_ECS_CONFIG
 
+
+*NOTE: Modify airflow.cfg or export environmental variables. For example:* 
+```bash
+AIRFLOW__ECS_FARGATE__REGION="us-west-2"
+```
 ## Extensibility
 There are many different ways to run an ECS or Fargate Container. You may want specific container overrides, environmental variables, subnets, etc. This project does not attempt to wrap around the AWS API. Instead, it allows the user to offer their own configuration in the form of Python dictionary, which are then passed in to Boto3's run_task function as **kwargs.
 

@@ -14,13 +14,13 @@ from airflow.configuration import conf
 
 
 DEFAULT_AWS_ECS_CONFIG = {
-    'cluster': conf.get('aws_ecs', 'cluster'),
-    'taskDefinition': conf.get('aws_ecs', 'task_definition'),
+    'cluster': conf.get('ecs_fargate', 'cluster'),
+    'taskDefinition': conf.get('ecs_fargate', 'task_definition'),
     'platformVersion': 'LATEST',
 
     'overrides': {
         'containerOverrides': [{
-            'name': conf.get('aws_ecs', 'container_name'),
+            'name': conf.get('ecs_fargate', 'container_name'),
             # The executor will overwrite the 'command' property during execution.
             # Must always be the first container!
             'command': []
@@ -29,16 +29,16 @@ DEFAULT_AWS_ECS_CONFIG = {
     'count': 1
 }
 
-if conf.has_option('aws_ecs', 'launch_type'):
-    DEFAULT_AWS_ECS_CONFIG['launchType'] = conf.get('aws_ecs', 'launch_type')
+if conf.has_option('ecs_fargate', 'launch_type'):
+    DEFAULT_AWS_ECS_CONFIG['launchType'] = conf.get('ecs_fargate', 'launch_type')
 
 # Only build this section if 'subnets', 'security_groups', and 'assign_public_ip' are populated
-if (conf.has_option('aws_ecs', 'subnets') and conf.has_option('aws_ecs', 'security_groups') and
-        conf.has_option('aws_ecs', 'assign_public_ip')):
+if (conf.has_option('ecs_fargate', 'subnets') and conf.has_option('ecs_fargate', 'security_groups') and
+        conf.has_option('ecs_fargate', 'assign_public_ip')):
     DEFAULT_AWS_ECS_CONFIG['networkConfiguration'] = {
         'awsvpcConfiguration': {
-            'subnets': conf.get('aws_ecs', 'subnets').split(','),
-            'securityGroups': conf.get('aws_ecs', 'security_groups').split(','),
-            'assignPublicIp': conf.get('aws_ecs', 'assign_public_ip')
+            'subnets': conf.get('ecs_fargate', 'subnets').split(','),
+            'securityGroups': conf.get('ecs_fargate', 'security_groups').split(','),
+            'assignPublicIp': conf.get('ecs_fargate', 'assign_public_ip')
         }
     }
