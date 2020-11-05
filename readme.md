@@ -2,6 +2,10 @@
 This is an AWS Executor that delegates every task to a scheduled container on either AWS ECS or AWS Fargate. By default, AWS Fargate will let you run
 2000 simultaneous containers, with each container representing 1 Airflow Task.
 
+```bash
+pip install airflow-ecs-fargate-executor
+```
+
 ## Getting Started
 For more information on any of these execution parameters, see the link below: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.run_task
 
