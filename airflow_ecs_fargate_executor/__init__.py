@@ -1,4 +1,4 @@
-from .aws_ecs_default_configs import DEFAULT_AWS_ECS_CONFIG
-from .aws_ecs_plugin import AwsEcsExecutor
+from .ecs_fargate_default_configs import DEFAULT_ECS_FARGATE_CONFIG
+from .ecs_fargate_plugin import AwsEcsFargateExecutor
 
-__all__ = [AwsEcsExecutor, DEFAULT_AWS_ECS_CONFIG]
+__all__ = [AwsEcsFargateExecutor, DEFAULT_ECS_FARGATE_CONFIG]
