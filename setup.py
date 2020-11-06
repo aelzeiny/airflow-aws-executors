@@ -2,12 +2,13 @@ import pathlib
 from setuptools import setup
 
 
-with open("readme.md", "r") as fh:
+with open(str(pathlib.Path.cwd() / "readme.md"), "r") as fh:
     long_description = fh.read()
+
 
 setup(
     name="airflow-ecs-fargate-executor",
-    version="0.9",
+    version="0.10",
     description="Apache Airflow Executor for AWS ECS and AWS Fargate",
     long_description=long_description,
     long_description_content_type="text/markdown",
