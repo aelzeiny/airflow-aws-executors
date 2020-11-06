@@ -199,7 +199,7 @@ class AwsEcsFargateExecutor(BaseExecutor):
                 raise EcsFargateError('No failures and no tasks provided in response. This should never happen.')
             else:
                 task = run_task_response['tasks'][0]
-                self.active_workers.add_task(task, ecs_task, cmd, exec_config)
+                self.active_workers.add_task(task, task_key, cmd, exec_config)
         if failure_reasons:
             self.log.debug('Pending tasks failed to launch for the following reasons: %s. Will retry later.',
                            dict(failure_reasons))

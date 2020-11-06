@@ -12,7 +12,7 @@ except FileNotFoundError:
 
 setup(
     name="airflow-ecs-fargate-executor",
-    version="0.10",
+    version="0.12",
     description=description,
     long_description=long_description,
     long_description_content_type="text/markdown",
