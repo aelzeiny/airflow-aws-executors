@@ -86,9 +86,8 @@ class AwsEcsFargateExecutor(BaseExecutor):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.region = conf.get('ecs_fargate', 'region')
-        self.cluster = conf.get('ecs_fargate', 'cluster')
-        self.container_name = conf.get('ecs_fargate', 'container_name')
+        self.cluster: Optional[str] = None
+        self.container_name: Optional[str] = None
         self.active_workers: Optional[EcsFargateTaskCollection] = None
         self.pending_tasks: Optional[deque] = None
         self.ecs = None
@@ -96,9 +95,12 @@ class AwsEcsFargateExecutor(BaseExecutor):
 
     def start(self):
         """Initialize Boto3 ECS Client, and other internal variables"""
+        region = conf.get('ecs_fargate', 'region')
+        self.cluster = conf.get('ecs_fargate', 'cluster')
+        self.container_name = conf.get('ecs_fargate', 'container_name')
         self.active_workers = EcsFargateTaskCollection()
         self.pending_tasks = deque()
-        self.ecs = boto3.client('ecs', region_name=self.region)  # noqa
+        self.ecs = boto3.client('ecs', region_name=region)  # noqa
 
     def sync(self):
         self.sync_running_tasks()
@@ -139,10 +141,9 @@ class AwsEcsFargateExecutor(BaseExecutor):
             self.active_workers.pop_by_key(task_key)
 
     def __describe_tasks(self, task_arns):
-        all_task_descriptions = {}
-        max_batch_size = self.__class__.DESCRIBE_TASKS_BATCH_SIZE
-        for i in range((len(task_arns) // max_batch_size) + 1):
-            batched_task_arns = task_arns[i * max_batch_size: (i + 1) * max_batch_size]
+        all_task_descriptions = {'tasks': [], 'failures': []}
+        for i in range((len(task_arns) // self.DESCRIBE_TASKS_BATCH_SIZE) + 1):
+            batched_task_arns = task_arns[i * self.DESCRIBE_TASKS_BATCH_SIZE: (i + 1) * self.DESCRIBE_TASKS_BATCH_SIZE]
             boto_describe_tasks = self.ecs.describe_tasks(tasks=batched_task_arns, cluster=self.cluster)
             describe_tasks_response = BotoDescribeTasksSchema().load(boto_describe_tasks)
             if describe_tasks_response.errors:
@@ -153,7 +154,8 @@ class AwsEcsFargateExecutor(BaseExecutor):
                         describe_tasks_response.errors
                     )
                 )
-            all_task_descriptions.update(describe_tasks_response.data)
+            all_task_descriptions['tasks'].extend(describe_tasks_response.data['tasks'])
+            all_task_descriptions['failures'].extend(describe_tasks_response.data['failures'])
         return all_task_descriptions
 
     def __handle_failed_task(self, task_arn: str, reason: str):
@@ -257,7 +259,7 @@ class AwsEcsFargateExecutor(BaseExecutor):
 
     def __load_run_kwargs(self) -> dict:
         run_kwargs = import_string(
-            conf.get('ecs_fargate', 'run_task_template')
+            conf.get('ecs_fargate', 'run_task_kwargs')
         )
         # Sanity check with some helpful errors
         if not isinstance(run_kwargs, dict):

@@ -55,16 +55,16 @@ I almost always recommend that you go the AWS Fargate route unless you need the 
 `[ecs_fargate]`
 * `region` 
     * **description**: The name of AWS Region
-    * **mandatory**: even with a custom run_task_template
+    * **mandatory**: even with a custom run_task_kwargs
     * **example**: us-east-1
 * `cluster` 
     * **description**: Name of AWS ECS or Fargate cluster
-    * **mandatory**: even with a custom run_task_template
+    * **mandatory**: even with a custom run_task_kwargs
 * `container_name` 
     * **description**: Name of registered Airflow container within your AWS cluster. This container will
     receive an airflow CLI command as an additional parameter to its entrypoint.
     For more info see url to Boto3 docs above.
-    * **mandatory**: even with a custom run_task_template
+    * **mandatory**: even with a custom run_task_kwargs
 * `task_definition` 
     * **description**: Name of AWS Task Definition. For more info see url to Boto3 docs above.
 * `launch_type` 
@@ -80,11 +80,11 @@ I almost always recommend that you go the AWS Fargate route unless you need the 
 * `subnets` 
     * **description**: Subnets for task to run in (comma-separated). For more info see url to Boto3 docs above.
     * **example**: subnet-XXXXXXXX,subnet-YYYYYYYY
-* `run_task_template`
+* `run_task_kwargs`
     * **description**: This is the default configuration for calling the ECS `run_task` function API (see url above).
     To change the parameters used to run a task in FARGATE or ECS, the user can overwrite the path to
     specify another jinja-templated JSON. More documentation can be found in the `Extensibility` section below.
-    * **mandatory**: even with a custom run_task_template
+    * **mandatory**: even with a custom run_task_kwargs
     * **default**: default_aws_ecs.DEFAULT_AWS_ECS_CONFIG
 
 
@@ -95,12 +95,12 @@ AIRFLOW__ECS_FARGATE__REGION="us-west-2"
 ## Extensibility
 There are many different ways to run an ECS or Fargate Container. You may want specific container overrides, environmental variables, subnets, etc. This project does not attempt to wrap around the AWS API. Instead, it allows the user to offer their own configuration in the form of Python dictionary, which are then passed in to Boto3's run_task function as **kwargs.
 
-In this example we will modify the DEFAULT_AWS_ECS_CONFIG. Note, however, there is nothing that's stopping us from complete overriding it and providing our own config. If we do so, the only manditory Airflow Configurations are `region`, `cluster`, `container_name`, and `run_task_template`.
+In this example we will modify the DEFAULT_AWS_ECS_CONFIG. Note, however, there is nothing that's stopping us from complete overriding it and providing our own config. If we do so, the only manditory Airflow Configurations are `region`, `cluster`, `container_name`, and `run_task_kwargs`.
 
 For example:
 
 ```bash
-export AIRFLOW__AWS_ECS__RUN_TASK_TEMPLATE="aws_ecs_configs.AWS_ECS_CONFIG"
+export AIRFLOW__AWS_ECS__RUN_TASK_KWARGS="aws_ecs_configs.AWS_ECS_CONFIG"
 ```
 
 ```python
