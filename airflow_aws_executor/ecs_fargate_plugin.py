@@ -63,7 +63,7 @@ class BotoTask:
 
 class AwsEcsFargateExecutor(BaseExecutor):
     """
-    The Airflow Scheduler create a shell command, and passes it to the executor. This ECS Executor simply
+    The Airflow Scheduler createsf a shell command, and passes it to the executor. This ECS Executor simply
     runs said airflow command on a remote AWS Fargate or AWS ECS Cluster with an task-definition configured
     with the same containers as the Scheduler. It then periodically checks in with the launched tasks
     (via task-arns) to determine the status.

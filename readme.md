@@ -12,7 +12,7 @@ In your `$AIRFLOW_HOME/plugins` folder create a file called `ecs_fargate_plugin.
 
 ```python
 from airflow.plugins_manager import AirflowPlugin
-from airflow_ecs_fargate_executor import EcsFargateExecutor
+from airflow_aws_executor import EcsFargateExecutor
 
 
 class EcsFargatePlugin(AirflowPlugin):
@@ -23,7 +23,7 @@ class EcsFargatePlugin(AirflowPlugin):
 
 For more information on any of these execution parameters, see the link below: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.run_task
 
-For boto3 credential management, see https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html
+For boto3 credential management, seed https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html
 
 
 ## How It Works

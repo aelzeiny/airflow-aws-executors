@@ -13,7 +13,7 @@ https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.h
 from airflow.configuration import conf
 
 
-DEFAULT_ECS_FARGATE_CONFIG = {
+DEFAULT_ECS_FARGATE_KWARGS = {
     'cluster': conf.get('ecs_fargate', 'cluster'),
     'taskDefinition': conf.get('ecs_fargate', 'task_definition'),
     'platformVersion': 'LATEST',
@@ -30,12 +30,12 @@ DEFAULT_ECS_FARGATE_CONFIG = {
 }
 
 if conf.has_option('ecs_fargate', 'launch_type'):
-    DEFAULT_ECS_FARGATE_CONFIG['launchType'] = conf.get('ecs_fargate', 'launch_type')
+    DEFAULT_ECS_FARGATE_KWARGS['launchType'] = conf.get('ecs_fargate', 'launch_type')
 
 # Only build this section if 'subnets', 'security_groups', and 'assign_public_ip' are populated
 if (conf.has_option('ecs_fargate', 'subnets') and conf.has_option('ecs_fargate', 'security_groups') and
         conf.has_option('ecs_fargate', 'assign_public_ip')):
-    DEFAULT_ECS_FARGATE_CONFIG['networkConfiguration'] = {
+    DEFAULT_ECS_FARGATE_KWARGS['networkConfiguration'] = {
         'awsvpcConfiguration': {
             'subnets': conf.get('ecs_fargate', 'subnets').split(','),
             'securityGroups': conf.get('ecs_fargate', 'security_groups').split(','),
