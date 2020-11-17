@@ -1,8 +1,7 @@
-"""AWS ECS Executor. Each Airflow task gets deligated out to an AWS ECS or Fargate Task"""
+"""AWS Batch Executor. Each Airflow task gets deligated out to an AWS Batch Job"""
 
 import time
 from copy import deepcopy
-
 from typing import Any, Dict, List, Optional, Tuple
 
 import boto3
@@ -17,19 +16,9 @@ TaskInstanceKeyType = Tuple[Any]
 ExecutorConfigType = Dict[str, Any]
 
 
-DEFAULT_BATCH_KWARGS = {
-    'jobName': conf.get('batch', 'job_name'),
-    'jobQueue': conf.get('batch', 'job_queue'),
-    'jobDefinition': conf.get('batch', 'job_definition'),
-    'containerOverrides': {
-        'command': []
-    }
-}
-
-
 class BatchJob:
     """
-    Data Transfer Object for an ECS Fargate Task
+    Data Transfer Object for an AWS Batch Job
     """
     STATE_MAPPINGS = {
         'SUBMITTED': State.QUEUED,
@@ -58,18 +47,22 @@ class BatchJob:
 
 class AwsBatchExecutor(BaseExecutor):
     """
-    The Airflow Scheduler create a shell command, and passes it to the executor. This ECS Executor simply
-    runs said airflow command on a remote AWS Fargate or AWS ECS Cluster with an task-definition configured
+    The Airflow Scheduler creates a shell command, and passes it to the executor. This Batch Executor simply
+    runs said airflow command on a remote AWS Batch Cluster with an job-definition configured
     with the same containers as the Scheduler. It then periodically checks in with the launched tasks
-    (via task-arns) to determine the status.
-    This allows individual tasks to specify CPU, memory, GPU, env variables, etc. When initializing a task,
-    there's an option for "executor config" which should be a dictionary with keys that match the "ContainerOverride"
-    definition per AWS' documentation (see link below).
+    (via job-ids) to determine the status.
+    The `submit_job_kwargs` configuration points to a dictionary that returns a dictionary. The
+    keys of the resulting dictionary should match the kwargs for the SubmitJob definition per AWS' documentation
+    (see below).
+    For maximum flexibility, individual tasks can specify `executor_config` as a dictionary, with keys that match the
+    request syntax for the SubmitJob definition per AWS' documentation (see link below). The `executor_config` will
+    update the `submit_job_kwargs` dictionary when calling the task. This allows individual jobs to specify CPU,
+    memory, GPU, env variables, etc.
     Prerequisite: proper configuration of Boto3 library
     .. seealso:: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html for
     authentication and access-key management. You can store an environmental variable, setup aws config from
     console, or use IAM roles.
-    .. seealso:: https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_ContainerOverride.html for an
+    .. seealso:: https://docs.aws.amazon.com/batch/latest/APIReference/API_SubmitJob.html for an
      Airflow TaskInstance's executor_config.
     """
     # AWS only allows a maximum number of JOBs in the describe_jobs function
@@ -175,7 +168,7 @@ class AwsBatchExecutor(BaseExecutor):
         self.end()
 
     @staticmethod
-    def __load_submit_kwargs() -> dict:
+    def _load_submit_kwargs() -> dict:
         submit_kwargs = import_string(
             conf.get('batch', 'submit_job_kwargs')
         )
@@ -218,11 +211,13 @@ class BatchTaskCollection:
 
 
 class BatchSubmitJobResponseSchema(Schema):
+    """API Response for SubmitJob"""
     # The unique identifier for the job.
     job_id = fields.String(load_from='jobId', required=True)
 
 
 class BatchJobDetailSchema(Schema):
+    """API Response for Describe Jobs"""
     # The unique identifier for the job.
     job_id = fields.String(load_from='jobId', required=True)
     # The current status for the job: 'SUBMITTED', 'PENDING', 'RUNNABLE', 'STARTING', 'RUNNING', 'SUCCEEDED', 'FAILED'
@@ -237,10 +232,10 @@ class BatchJobDetailSchema(Schema):
 
 
 class BatchDescribeJobsResponseSchema(Schema):
+    """API Response for Describe Jobs"""
     # The list of jobs
     jobs = fields.List(fields.Nested(BatchJobDetailSchema), required=True)
 
 
 class BatchError(Exception):
-    """Thrown when something unexpected has occurred within the AWS ECS/Fargate ecosystem"""
-
+    """Thrown when something unexpected has occurred within the AWS Batch ecosystem"""
