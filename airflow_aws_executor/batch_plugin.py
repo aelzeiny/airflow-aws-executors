@@ -35,14 +35,14 @@ class BatchJob:
         self.status = status
         self.status_reason = status_reason
 
-    def get_task_state(self) -> str:
+    def get_job_state(self) -> str:
         """
         This is the primary logic that handles state in an AWS Batch Task
         """
         return self.STATE_MAPPINGS.get(self.status, State.QUEUED)
 
     def __repr__(self):
-        return '({} -> {}, {})'.format(self.job_id, self.status, self.get_task_state())
+        return '({} -> {}, {})'.format(self.job_id, self.status, self.get_job_state())
 
 
 class AwsBatchExecutor(BaseExecutor):
@@ -70,16 +70,16 @@ class AwsBatchExecutor(BaseExecutor):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.active_workers: Optional[BatchTaskCollection] = None
+        self.active_workers: Optional[BatchJobCollection] = None
         self.batch = None
         self.submit_job_kwargs = None
 
     def start(self):
         """Initialize Boto3 ECS Client, and other internal variables"""
         region = conf.get('batch', 'region')
-        self.active_workers = BatchTaskCollection()
+        self.active_workers = BatchJobCollection()
         self.batch = boto3.client('batch', region_name=region)
-        self.submit_job_kwargs = self.__load_submit_kwargs()
+        self.submit_job_kwargs = self._load_submit_kwargs()
 
     def sync(self):
         """Checks and update state on all running tasks"""
@@ -92,10 +92,10 @@ class AwsBatchExecutor(BaseExecutor):
         self.log.debug('Active Workers: %s', describe_job_response)
 
         for job in describe_job_response:
-            if job.get_task_state() == State.FAILED:
+            if job.get_job_state() == State.FAILED:
                 task_key = self.active_workers.pop_by_id(job.job_id)
                 self.fail(task_key)
-            elif job.get_task_state() == State.SUCCESS:
+            elif job.get_job_state() == State.SUCCESS:
                 task_key = self.active_workers.pop_by_id(job.job_id)
                 self.success(task_key)
 
@@ -126,7 +126,7 @@ class AwsBatchExecutor(BaseExecutor):
         job_id = self._run_task(command, executor_config)
         self.active_workers.add_job(job_id, key)
 
-    def _run_task(self, cmd: CommandType, exec_config: ExecutorConfigType) -> Dict[str, Any]:
+    def _run_task(self, cmd: CommandType, exec_config: ExecutorConfigType) -> str:
         """
         The command and executor config will be placed in the container-override section of the JSON request, before
         calling Boto3's "run_task" function.
@@ -181,7 +181,7 @@ class AwsBatchExecutor(BaseExecutor):
         return submit_kwargs
 
 
-class BatchTaskCollection:
+class BatchJobCollection:
     """
     A Two-way dictionary between Airflow task ids and Batch Job IDs
     """
