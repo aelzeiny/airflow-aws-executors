@@ -19,7 +19,7 @@ EcsFargateQueuedTask = namedtuple('EcsFargateQueuedTask', ('key', 'command', 'ex
 ExecutorConfigType = Dict[str, Any]
 
 
-class BotoTask:
+class EcsFargateTask:
     """
     Data Transfer Object for an ECS Fargate Task
     """
@@ -91,7 +91,7 @@ class AwsEcsFargateExecutor(BaseExecutor):
         self.active_workers: Optional[EcsFargateTaskCollection] = None
         self.pending_tasks: Optional[deque] = None
         self.ecs = None
-        self.run_task_kwargs = self.__load_run_kwargs()
+        self.run_task_kwargs = None
 
     def start(self):
         """Initialize Boto3 ECS Client, and other internal variables"""
@@ -101,6 +101,7 @@ class AwsEcsFargateExecutor(BaseExecutor):
         self.active_workers = EcsFargateTaskCollection()
         self.pending_tasks = deque()
         self.ecs = boto3.client('ecs', region_name=region)  # noqa
+        self.run_task_kwargs = self.__load_run_kwargs()
 
     def sync(self):
         self.sync_running_tasks()
@@ -288,11 +289,11 @@ class EcsFargateTaskCollection:
     def __init__(self):
         self.key_to_arn: Dict[TaskInstanceKeyType, str] = {}
         self.arn_to_key: Dict[str, TaskInstanceKeyType] = {}
-        self.tasks: Dict[str, BotoTask] = {}
+        self.tasks: Dict[str, EcsFargateTask] = {}
         self.key_to_failure_counts: Dict[TaskInstanceKeyType, int] = defaultdict(int)
         self.key_to_task_info: Dict[TaskInstanceKeyType, self.EcsFargateTaskInfo] = {}
 
-    def add_task(self, task: BotoTask, airflow_task_key: TaskInstanceKeyType, airflow_cmd: CommandType,
+    def add_task(self, task: EcsFargateTask, airflow_task_key: TaskInstanceKeyType, airflow_cmd: CommandType,
                  exec_config: ExecutorConfigType):
         """Adds a task to the collection"""
         arn = task.task_arn
@@ -301,20 +302,20 @@ class EcsFargateTaskCollection:
         self.arn_to_key[arn] = airflow_task_key
         self.key_to_task_info[airflow_task_key] = self.EcsFargateTaskInfo(airflow_cmd, exec_config)
 
-    def update_task(self, task: BotoTask):
+    def update_task(self, task: EcsFargateTask):
         """Updates the state of the given task based on task ARN"""
         self.tasks[task.task_arn] = task
 
-    def task_by_key(self, task_key: TaskInstanceKeyType) -> BotoTask:
+    def task_by_key(self, task_key: TaskInstanceKeyType) -> EcsFargateTask:
         """Get a task by Airflow Instance Key"""
         arn = self.key_to_arn[task_key]
         return self.task_by_arn(arn)
 
-    def task_by_arn(self, arn) -> BotoTask:
+    def task_by_arn(self, arn) -> EcsFargateTask:
         """Get a task by AWS ARN"""
         return self.tasks[arn]
 
-    def pop_by_key(self, task_key: TaskInstanceKeyType) -> BotoTask:
+    def pop_by_key(self, task_key: TaskInstanceKeyType) -> EcsFargateTask:
         """Deletes task from collection based off of Airflow Task Instance Key"""
         arn = self.key_to_arn[task_key]
         task = self.tasks[arn]
@@ -379,8 +380,9 @@ class BotoTaskSchema(Schema):
 
     @post_load
     def make_task(self, data, **kwargs):
-        """Overwrites marshmallow .data property to return an instance of BotoTask instead of a dictionary"""
-        return BotoTask(**data)
+        """Overwrites marshmallow .data property to return an instance of EcsFargateTask instead of a dictionary"""
+        print('postload task schema')
+        return EcsFargateTask(**data)
 
 
 class BotoFailureSchema(Schema):

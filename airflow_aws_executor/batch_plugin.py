@@ -227,7 +227,7 @@ class BatchJobDetailSchema(Schema):
 
     @post_load
     def make_task(self, data, **kwargs):
-        """Overwrites marshmallow data property to return an instance of BotoTask instead of a dictionary"""
+        """Overwrites marshmallow data property to return an instance of EcsFargateTask instead of a dictionary"""
         return BatchJob(**data)
 
 
