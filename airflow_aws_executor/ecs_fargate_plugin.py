@@ -17,6 +17,7 @@ TaskInstanceKeyType = Tuple[Any]
 ExecutorConfigFunctionType = Callable[[CommandType], dict]
 EcsFargateQueuedTask = namedtuple('EcsFargateQueuedTask', ('key', 'command', 'executor_config'))
 ExecutorConfigType = Dict[str, Any]
+EcsFargateTaskInfo = namedtuple('EcsFargateTaskInfo', ('cmd', 'config'))
 
 
 class EcsFargateTask:
@@ -274,6 +275,7 @@ class AwsEcsFargateExecutor(BaseExecutor):
         return run_kwargs
 
     def get_container(self, container_list):
+        """Searches task list for core Airflow container"""
         for container in container_list:
             if container['name'] == self.container_name:
                 return container
@@ -284,14 +286,13 @@ class EcsFargateTaskCollection:
     """
     A five-way dictionary between Airflow task ids, Airflow cmds, ECS ARNs, and ECS task objects
     """
-    EcsFargateTaskInfo = namedtuple('EcsFargateTaskInfo', ('cmd', 'config'))
 
     def __init__(self):
         self.key_to_arn: Dict[TaskInstanceKeyType, str] = {}
         self.arn_to_key: Dict[str, TaskInstanceKeyType] = {}
         self.tasks: Dict[str, EcsFargateTask] = {}
         self.key_to_failure_counts: Dict[TaskInstanceKeyType, int] = defaultdict(int)
-        self.key_to_task_info: Dict[TaskInstanceKeyType, self.EcsFargateTaskInfo] = {}
+        self.key_to_task_info: Dict[TaskInstanceKeyType, EcsFargateTaskInfo] = {}
 
     def add_task(self, task: EcsFargateTask, airflow_task_key: TaskInstanceKeyType, airflow_cmd: CommandType,
                  exec_config: ExecutorConfigType):
@@ -300,7 +301,7 @@ class EcsFargateTaskCollection:
         self.tasks[arn] = task
         self.key_to_arn[airflow_task_key] = arn
         self.arn_to_key[arn] = airflow_task_key
-        self.key_to_task_info[airflow_task_key] = self.EcsFargateTaskInfo(airflow_cmd, exec_config)
+        self.key_to_task_info[airflow_task_key] = EcsFargateTaskInfo(airflow_cmd, exec_config)
 
     def update_task(self, task: EcsFargateTask):
         """Updates the state of the given task based on task ARN"""
