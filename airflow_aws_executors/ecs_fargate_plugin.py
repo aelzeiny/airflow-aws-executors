@@ -17,9 +17,10 @@ TaskInstanceKeyType = Tuple[Any]
 ExecutorConfigFunctionType = Callable[[CommandType], dict]
 EcsFargateQueuedTask = namedtuple('EcsFargateQueuedTask', ('key', 'command', 'executor_config'))
 ExecutorConfigType = Dict[str, Any]
+EcsFargateTaskInfo = namedtuple('EcsFargateTaskInfo', ('cmd', 'config'))
 
 
-class BotoTask:
+class EcsFargateTask:
     """
     Data Transfer Object for an ECS Fargate Task
     """
@@ -63,7 +64,7 @@ class BotoTask:
 
 class AwsEcsFargateExecutor(BaseExecutor):
     """
-    The Airflow Scheduler create a shell command, and passes it to the executor. This ECS Executor simply
+    The Airflow Scheduler createsf a shell command, and passes it to the executor. This ECS Executor simply
     runs said airflow command on a remote AWS Fargate or AWS ECS Cluster with an task-definition configured
     with the same containers as the Scheduler. It then periodically checks in with the launched tasks
     (via task-arns) to determine the status.
@@ -86,19 +87,22 @@ class AwsEcsFargateExecutor(BaseExecutor):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.region = conf.get('ecs_fargate', 'region')
-        self.cluster = conf.get('ecs_fargate', 'cluster')
-        self.container_name = conf.get('ecs_fargate', 'container_name')
+        self.cluster: Optional[str] = None
+        self.container_name: Optional[str] = None
         self.active_workers: Optional[EcsFargateTaskCollection] = None
         self.pending_tasks: Optional[deque] = None
         self.ecs = None
-        self.run_task_kwargs = self.__load_run_kwargs()
+        self.run_task_kwargs = None
 
     def start(self):
         """Initialize Boto3 ECS Client, and other internal variables"""
+        region = conf.get('ecs_fargate', 'region')
+        self.cluster = conf.get('ecs_fargate', 'cluster')
+        self.container_name = conf.get('ecs_fargate', 'container_name')
         self.active_workers = EcsFargateTaskCollection()
         self.pending_tasks = deque()
-        self.ecs = boto3.client('ecs', region_name=self.region)  # noqa
+        self.ecs = boto3.client('ecs', region_name=region)  # noqa
+        self.run_task_kwargs = self.__load_run_kwargs()
 
     def sync(self):
         self.sync_running_tasks()
@@ -139,10 +143,9 @@ class AwsEcsFargateExecutor(BaseExecutor):
             self.active_workers.pop_by_key(task_key)
 
     def __describe_tasks(self, task_arns):
-        all_task_descriptions = {}
-        max_batch_size = self.__class__.DESCRIBE_TASKS_BATCH_SIZE
-        for i in range((len(task_arns) // max_batch_size) + 1):
-            batched_task_arns = task_arns[i * max_batch_size: (i + 1) * max_batch_size]
+        all_task_descriptions = {'tasks': [], 'failures': []}
+        for i in range((len(task_arns) // self.DESCRIBE_TASKS_BATCH_SIZE) + 1):
+            batched_task_arns = task_arns[i * self.DESCRIBE_TASKS_BATCH_SIZE: (i + 1) * self.DESCRIBE_TASKS_BATCH_SIZE]
             boto_describe_tasks = self.ecs.describe_tasks(tasks=batched_task_arns, cluster=self.cluster)
             describe_tasks_response = BotoDescribeTasksSchema().load(boto_describe_tasks)
             if describe_tasks_response.errors:
@@ -153,7 +156,8 @@ class AwsEcsFargateExecutor(BaseExecutor):
                         describe_tasks_response.errors
                     )
                 )
-            all_task_descriptions.update(describe_tasks_response.data)
+            all_task_descriptions['tasks'].extend(describe_tasks_response.data['tasks'])
+            all_task_descriptions['failures'].extend(describe_tasks_response.data['failures'])
         return all_task_descriptions
 
     def __handle_failed_task(self, task_arn: str, reason: str):
@@ -257,7 +261,11 @@ class AwsEcsFargateExecutor(BaseExecutor):
 
     def __load_run_kwargs(self) -> dict:
         run_kwargs = import_string(
-            conf.get('ecs_fargate', 'run_task_template')
+            conf.get(
+                'ecs_fargate',
+                'run_task_kwargs',
+                fallback='airflow_aws_executors.conf.ECS_FARGATE_RUN_TASK_KWARGS'
+            )
         )
         # Sanity check with some helpful errors
         if not isinstance(run_kwargs, dict):
@@ -271,6 +279,7 @@ class AwsEcsFargateExecutor(BaseExecutor):
         return run_kwargs
 
     def get_container(self, container_list):
+        """Searches task list for core Airflow container"""
         for container in container_list:
             if container['name'] == self.container_name:
                 return container
@@ -281,38 +290,37 @@ class EcsFargateTaskCollection:
     """
     A five-way dictionary between Airflow task ids, Airflow cmds, ECS ARNs, and ECS task objects
     """
-    EcsFargateTaskInfo = namedtuple('EcsFargateTaskInfo', ('cmd', 'config'))
 
     def __init__(self):
         self.key_to_arn: Dict[TaskInstanceKeyType, str] = {}
         self.arn_to_key: Dict[str, TaskInstanceKeyType] = {}
-        self.tasks: Dict[str, BotoTask] = {}
+        self.tasks: Dict[str, EcsFargateTask] = {}
         self.key_to_failure_counts: Dict[TaskInstanceKeyType, int] = defaultdict(int)
-        self.key_to_task_info: Dict[TaskInstanceKeyType, self.EcsFargateTaskInfo] = {}
+        self.key_to_task_info: Dict[TaskInstanceKeyType, EcsFargateTaskInfo] = {}
 
-    def add_task(self, task: BotoTask, airflow_task_key: TaskInstanceKeyType, airflow_cmd: CommandType,
+    def add_task(self, task: EcsFargateTask, airflow_task_key: TaskInstanceKeyType, airflow_cmd: CommandType,
                  exec_config: ExecutorConfigType):
         """Adds a task to the collection"""
         arn = task.task_arn
         self.tasks[arn] = task
         self.key_to_arn[airflow_task_key] = arn
         self.arn_to_key[arn] = airflow_task_key
-        self.key_to_task_info[airflow_task_key] = self.EcsFargateTaskInfo(airflow_cmd, exec_config)
+        self.key_to_task_info[airflow_task_key] = EcsFargateTaskInfo(airflow_cmd, exec_config)
 
-    def update_task(self, task: BotoTask):
+    def update_task(self, task: EcsFargateTask):
         """Updates the state of the given task based on task ARN"""
         self.tasks[task.task_arn] = task
 
-    def task_by_key(self, task_key: TaskInstanceKeyType) -> BotoTask:
+    def task_by_key(self, task_key: TaskInstanceKeyType) -> EcsFargateTask:
         """Get a task by Airflow Instance Key"""
         arn = self.key_to_arn[task_key]
         return self.task_by_arn(arn)
 
-    def task_by_arn(self, arn) -> BotoTask:
+    def task_by_arn(self, arn) -> EcsFargateTask:
         """Get a task by AWS ARN"""
         return self.tasks[arn]
 
-    def pop_by_key(self, task_key: TaskInstanceKeyType) -> BotoTask:
+    def pop_by_key(self, task_key: TaskInstanceKeyType) -> EcsFargateTask:
         """Deletes task from collection based off of Airflow Task Instance Key"""
         arn = self.key_to_arn[task_key]
         task = self.tasks[arn]
@@ -377,8 +385,9 @@ class BotoTaskSchema(Schema):
 
     @post_load
     def make_task(self, data, **kwargs):
-        """Overwrites marshmallow .data property to return an instance of BotoTask instead of a dictionary"""
-        return BotoTask(**data)
+        """Overwrites marshmallow .data property to return an instance of EcsFargateTask instead of a dictionary"""
+        print('postload task schema')
+        return EcsFargateTask(**data)
 
 
 class BotoFailureSchema(Schema):
