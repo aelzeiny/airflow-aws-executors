@@ -9,24 +9,7 @@ pip install airflow-aws-executors
 ```
 
 ## Getting Started
-
-In your `$AIRFLOW_HOME/plugins` folder create a file called `ecs_fargate_plugin.py`.
-
-```python
-from airflow.plugins_manager import AirflowPlugin
-from airflow_aws_executors import EcsFargateExecutor
-
-
-class EcsFargatePlugin(AirflowPlugin):
-    """AWS ECS & AWS FARGATE Plugin"""
-    name = "aws_ecs_plugin"
-    executors = [EcsFargateExecutor]
-```
-
-For more information on any of these execution parameters, see the link below: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.run_task
-
-For boto3 credential management, seed https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html
-
+Please see the [Getting Started ReadMe](getting_started_batch.md)
 
 ## How It Works
 Everytime Apache Airflow wants to run a task, this executor will use Boto3's [ECS.run_task()]() function to schedule a container on an existing cluster. Then every scheduler heartbeat the executor will check the status of every running container, and sync it with Airflow.
@@ -54,6 +37,27 @@ I almost always recommend that you go the AWS Fargate route unless you need the 
 | Flexibility       | High                                                          | Low                                     |
 
 ### Airflow Configurations
+##### Batch
+`[batch]`
+* `region` 
+    * **description**: The name of AWS Region
+    * **mandatory**: even with a custom run_task_kwargs
+    * **example**: us-east-1
+* `job_name`
+    * **description**: The name of airflow job
+    * **example**: airflow-job-name
+* `job_queue`
+    * **description**: The name of AWS Batch Queue in which tasks are submitted
+    * **example**: airflow-job-queue
+* `job_definition`
+    * **description**: The name of the AWS Batch Job Definition; optionally includes revision number
+    * **example**: airflow-job-definition or airflow-job-definition:2
+* `submit_job_kwargs`
+    * **description**: This is the default configuration for calling the Batch [submit_job function][submit_job] API.
+    To change the parameters used to run a task in Batch, the user can overwrite the path to
+    specify another python dictionary. More documentation can be found in the `Extensibility` section below.
+    * **default**: airflow_aws_executors.conf.BATCH_SUBMIT_JOB_KWARGS
+##### ECS & FARGATE
 `[ecs_fargate]`
 * `region` 
     * **description**: The name of AWS Region
@@ -83,11 +87,10 @@ I almost always recommend that you go the AWS Fargate route unless you need the 
     * **description**: Subnets for task to run in (comma-separated). For more info see url to Boto3 docs above.
     * **example**: subnet-XXXXXXXX,subnet-YYYYYYYY
 * `run_task_kwargs`
-    * **description**: This is the default configuration for calling the ECS `run_task` function API (see url above).
+    * **description**: This is the default configuration for calling the ECS [run_task function][run_task] API.
     To change the parameters used to run a task in FARGATE or ECS, the user can overwrite the path to
-    specify another jinja-templated JSON. More documentation can be found in the `Extensibility` section below.
-    * **mandatory**: even with a custom run_task_kwargs
-    * **default**: default_aws_ecs.DEFAULT_AWS_ECS_CONFIG
+    specify another python dictionary. More documentation can be found in the `Extensibility` section below.
+    * **default**: airflow_aws_executors.conf.ECS_FARGATE_RUN_TASK_KWARGS
 
 
 *NOTE: Modify airflow.cfg or export environmental variables. For example:* 
@@ -95,23 +98,28 @@ I almost always recommend that you go the AWS Fargate route unless you need the 
 AIRFLOW__ECS_FARGATE__REGION="us-west-2"
 ```
 ## Extensibility
-There are many different ways to run an ECS or Fargate Container. You may want specific container overrides, environmental variables, subnets, etc. This project does not attempt to wrap around the AWS API. Instead, it allows the user to offer their own configuration in the form of Python dictionary, which are then passed in to Boto3's run_task function as **kwargs.
+There are many different ways to run an ECS or Fargate Container. You may want specific container overrides, 
+environmental variables, subnets, etc. This project does not attempt to wrap around the AWS API. 
+Instead, it allows the user to offer their own configuration in the form of a Python dictionary, 
+which are then passed in to Boto3's [run_task][run_task] function as **kwargs.
 
-In this example we will modify the DEFAULT_AWS_ECS_CONFIG. Note, however, there is nothing that's stopping us from complete overriding it and providing our own config. If we do so, the only manditory Airflow Configurations are `region`, `cluster`, `container_name`, and `run_task_kwargs`.
+In this example we will modify the default `run_task_kwargs`. Note, however, there is nothing that's stopping us from complete overriding it and providing our own config. If we do so, the only manditory Airflow Configurations are `region`, `cluster`, `container_name`, and `run_task_kwargs`.
 
 For example:
 
 ```bash
-export AIRFLOW__AWS_ECS__RUN_TASK_KWARGS="aws_ecs_configs.AWS_ECS_CONFIG"
+export AIRFLOW__ECS_FARGATE__RUN_TASK_KWARGS="custom_module.CUSTOM_RUN_TASK_KWARGS"
 ```
 
 ```python
-# filename: AIRFLOW_HOME/plugins/aws_ecs_config.py
-from aws_ecs_default_configs import DEFAULT_AWS_ECS_CONFIG
+# filename: AIRFLOW_HOME/plugins/custom_module.py
+from airflow_aws_executors.conf import ECS_FARGATE_RUN_TASK_KWARGS
 
 # Add environmental variables to contianer overrides
-AWS_ECS_CONFIG = DEFAULT_AWS_ECS_CONFIG
-AWS_ECS_CONFIG['overrides']['containerOverrides'][0]['environment'] = ['SOME_ENV_A', 'SOME_ENV_B']
+CUSTOM_RUN_TASK_KWARGS = ECS_FARGATE_RUN_TASK_KWARGS
+CUSTOM_RUN_TASK_KWARGS['overrides']['containerOverrides'][0]['environment'] = [
+    {'name': 'CUSTOM_ENV_VAR', 'value': 'env_var_val'}
+]
 ```
 
 ## Custom Container Requirements
@@ -134,3 +142,8 @@ Please file a ticket in github for issues. Be persistant and be polite.
 ## Contribution & Development
 This repository uses Travis-CI for CI, pytest for Integration/Unit tests, and isort+pylint for code-style. 
 Pythonic Type-Hinting is encouraged. It's my hope that 
+
+
+[boto_conf]: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html
+[run_task]: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.run_task
+[submit_job]: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#Batch.Client.submit_job
