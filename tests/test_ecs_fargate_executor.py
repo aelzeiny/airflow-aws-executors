@@ -317,6 +317,9 @@ class TestAwsEcsFargateExecutor(TestCase):
     def __set_mocked_executor(self):
         """Mock ECS such that there's nothing wrong with anything"""
         from airflow.configuration import conf
+
+        if not conf.has_section('ecs_fargate'):
+            conf.add_section('ecs_fargate')
         conf.set('ecs_fargate', 'region', 'us-west-1')
         conf.set('ecs_fargate', 'cluster', 'some-ecs-cluster')
         conf.set('ecs_fargate', 'task_definition', 'some-ecs-task-definition')
