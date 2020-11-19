@@ -1,9 +1,11 @@
-# AWS ECS and Fargate Executor
+# Apache Airflow: Native AWS Executors
+[![Build Status](https://travis-ci.com/aelzeiny/airflow-aws-executors.svg?branch=master)](https://travis-ci.com/aelzeiny/airflow-aws-executors)
+
 This is an AWS Executor that delegates every task to a scheduled container on either AWS ECS or AWS Fargate. By default, AWS Fargate will let you run
 2000 simultaneous containers, with each container representing 1 Airflow Task.
 
 ```bash
-pip install airflow-ecs-fargate-executor
+pip install airflow-aws-executors
 ```
 
 ## Getting Started
@@ -125,3 +127,10 @@ task = PythonOperator(
     dag=dag
 )
 ```
+
+## Issues & Bugs
+Please file a ticket in github for issues. Be persistant and be polite.
+
+## Contribution & Development
+This repository uses Travis-CI for CI, pytest for Integration/Unit tests, and isort+pylint for code-style. 
+Pythonic Type-Hinting is encouraged. It's my hope that 
