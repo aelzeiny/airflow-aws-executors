@@ -27,7 +27,7 @@ setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
     ],
-    packages=["airflow_aws_executor"],
+    packages=["airflow_aws_executors"],
     include_package_data=True,
     install_requires=["boto3", "apache-airflow"]
 )

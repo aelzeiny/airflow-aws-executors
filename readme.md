@@ -12,7 +12,7 @@ In your `$AIRFLOW_HOME/plugins` folder create a file called `ecs_fargate_plugin.
 
 ```python
 from airflow.plugins_manager import AirflowPlugin
-from airflow_aws_executor import EcsFargateExecutor
+from airflow_aws_executors import EcsFargateExecutor
 
 
 class EcsFargatePlugin(AirflowPlugin):

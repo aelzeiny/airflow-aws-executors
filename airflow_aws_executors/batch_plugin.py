@@ -83,12 +83,12 @@ class AwsBatchExecutor(BaseExecutor):
 
     def sync(self):
         """Checks and update state on all running tasks"""
-        all_task_arns = self.active_workers.get_all_jobs()
-        if not all_task_arns:
+        all_job_ids = self.active_workers.get_all_jobs()
+        if not all_job_ids:
             self.log.debug("No active tasks, skipping sync")
             return
 
-        describe_job_response = self._describe_tasks(all_task_arns)
+        describe_job_response = self._describe_tasks(all_job_ids)
         self.log.debug('Active Workers: %s', describe_job_response)
 
         for job in describe_job_response:
@@ -123,10 +123,10 @@ class AwsBatchExecutor(BaseExecutor):
         """
         if executor_config and ('name' in executor_config or 'command' in executor_config):
             raise ValueError('Executor Config should never override "name" or "command"')
-        job_id = self._run_task(command, executor_config)
+        job_id = self._submit_job(command, executor_config or {})
         self.active_workers.add_job(job_id, key)
 
-    def _run_task(self, cmd: CommandType, exec_config: ExecutorConfigType) -> str:
+    def _submit_job(self, cmd: CommandType, exec_config: ExecutorConfigType) -> str:
         """
         The command and executor config will be placed in the container-override section of the JSON request, before
         calling Boto3's "run_task" function.
@@ -162,7 +162,7 @@ class AwsBatchExecutor(BaseExecutor):
         """
         for job_id in self.active_workers.get_all_jobs():
             self.batch.terminate_job(
-                job_id=job_id,
+                jobId=job_id,
                 reason='Airflow Executor received a SIGTERM'
             )
         self.end()
@@ -170,7 +170,7 @@ class AwsBatchExecutor(BaseExecutor):
     @staticmethod
     def _load_submit_kwargs() -> dict:
         submit_kwargs = import_string(
-            conf.get('batch', 'submit_job_kwargs')
+            conf.get('batch', 'submit_job_kwargs', fallback='airflow_aws_executors.conf.BATCH_SUBMIT_JOB_KWARGS')
         )
         # Sanity check with some helpful errors
         assert isinstance(submit_kwargs, dict)

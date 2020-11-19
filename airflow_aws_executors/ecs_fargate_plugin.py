@@ -261,7 +261,11 @@ class AwsEcsFargateExecutor(BaseExecutor):
 
     def __load_run_kwargs(self) -> dict:
         run_kwargs = import_string(
-            conf.get('ecs_fargate', 'run_task_kwargs')
+            conf.get(
+                'ecs_fargate',
+                'run_task_kwargs',
+                fallback='airflow_aws_executors.conf.ECS_FARGATE_RUN_TASK_KWARGS'
+            )
         )
         # Sanity check with some helpful errors
         if not isinstance(run_kwargs, dict):
