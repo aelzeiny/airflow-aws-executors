@@ -1,4 +1,4 @@
-from .ecs_fargate_plugin import AwsEcsFargateExecutor
 from .batch_plugin import AwsBatchExecutor
+from .ecs_fargate_plugin import AwsEcsFargateExecutor
 
-__all__ = [AwsEcsFargateExecutor, AwsBatchExecutor]
+__all__ = ['AwsEcsFargateExecutor', 'AwsBatchExecutor']
