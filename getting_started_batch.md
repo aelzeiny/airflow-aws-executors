@@ -21,7 +21,7 @@ Build this image and upload it to a private repository. You may want to use Dock
     ```dockerfile
     FROM puckel/docker-airflow
     
-    RUN pip3 install --no-cache-dir boto3
+    RUN pip3 install --no-cache-dir boto3 airflow-aws-exeecutors
     ENV AIRFLOW__CORE__FERNET_KEY [fernet key]
     ENV AIRFLOW__CORE__SQL_ALCHEMY_CONN postgresql+psycopg2://[username]:[password]@[rds-host]:5432/airflow_metadb
     ENV AIRFLOW__CORE__EXECUTOR aws_executors_plugin.AwsBatchExecutor
