@@ -1,4 +1,4 @@
-# Gettings Started with AWS Batch
+# Getting Started with AWS Batch
 
 1. The first thing you want to do (if you haven't already) is setup AWS credentials on the machine running the executor. 
 Perhaps this means creating a configuration file, loading environmental variables, 
@@ -49,7 +49,7 @@ Build this image and upload it to a private repository. You may want to use Dock
     `["airflow", "run", <dag_id>, <task_id>, <execution_date>]` are accepted by your container's entrypoint script.
  
  4. Run through the AWS Batch Creation Wizard on AWS Console. The executor does not have any
- prerequisits to how you create your Job Queue or Compute Environment. Go nuts; have at it. I'll refer you to the 
+ prerequisites to how you create your Job Queue or Compute Environment. Go nuts; have at it. I'll refer you to the 
  [AWS Docs' Getting Started with Batch](https://docs.aws.amazon.com/batch/latest/userguide/Batch_GetStarted.html).
  You will need to assign the right IAM roles for the remote S3 logging. 
  Also, your dynamically provisioned EC2 instances do not need to be connected to the public internet, 
