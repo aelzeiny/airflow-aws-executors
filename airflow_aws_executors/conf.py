@@ -32,42 +32,46 @@ def has_option(section, config_name):
     return False
 
 
-BATCH_SUBMIT_JOB_KWARGS = {
-    'jobName': conf.get('batch', 'job_name'),
-    'jobQueue': conf.get('batch', 'job_queue'),
-    'jobDefinition': conf.get('batch', 'job_definition'),
-    'containerOverrides': {
-        'command': []
-    }
-}
-
-
-ECS_FARGATE_RUN_TASK_KWARGS = {
-    'cluster': conf.get('ecs_fargate', 'cluster'),
-    'taskDefinition': conf.get('ecs_fargate', 'task_definition'),
-    'platformVersion': 'LATEST',
-
-    'overrides': {
-        'containerOverrides': [{
-            'name': conf.get('ecs_fargate', 'container_name'),
-            # The executor will overwrite the 'command' property during execution.
-            # Must always be the first container!
+BATCH_SUBMIT_JOB_KWARGS = {}
+if conf.has_section('batch'):
+    BATCH_SUBMIT_JOB_KWARGS = {
+        'jobName': conf.get('batch', 'job_name'),
+        'jobQueue': conf.get('batch', 'job_queue'),
+        'jobDefinition': conf.get('batch', 'job_definition'),
+        'containerOverrides': {
             'command': []
-        }]
-    },
-    'count': 1
-}
-
-if has_option('ecs_fargate', 'launch_type'):
-    ECS_FARGATE_RUN_TASK_KWARGS['launchType'] = conf.get('ecs_fargate', 'launch_type')
-
-# Only build this section if 'subnets', 'security_groups', and 'assign_public_ip' are populated
-if (has_option('ecs_fargate', 'subnets') and has_option('ecs_fargate', 'security_groups') and
-        conf.has_option('ecs_fargate', 'assign_public_ip')):
-    ECS_FARGATE_RUN_TASK_KWARGS['networkConfiguration'] = {
-        'awsvpcConfiguration': {
-            'subnets': conf.get('ecs_fargate', 'subnets').split(','),
-            'securityGroups': conf.get('ecs_fargate', 'security_groups').split(','),
-            'assignPublicIp': conf.get('ecs_fargate', 'assign_public_ip')
         }
     }
+
+
+ECS_FARGATE_RUN_TASK_KWARGS = {}
+if conf.has_section('ecs_fargate'):
+    ECS_FARGATE_RUN_TASK_KWARGS = {
+        'cluster': conf.get('ecs_fargate', 'cluster'),
+        'taskDefinition': conf.get('ecs_fargate', 'task_definition'),
+        'platformVersion': 'LATEST',
+
+        'overrides': {
+            'containerOverrides': [{
+                'name': conf.get('ecs_fargate', 'container_name'),
+                # The executor will overwrite the 'command' property during execution.
+                # Must always be the first container!
+                'command': []
+            }]
+        },
+        'count': 1
+    }
+
+    if has_option('ecs_fargate', 'launch_type'):
+        ECS_FARGATE_RUN_TASK_KWARGS['launchType'] = conf.get('ecs_fargate', 'launch_type')
+
+    # Only build this section if 'subnets', 'security_groups', and 'assign_public_ip' are populated
+    if (has_option('ecs_fargate', 'subnets') and has_option('ecs_fargate', 'security_groups') and
+            conf.has_option('ecs_fargate', 'assign_public_ip')):
+        ECS_FARGATE_RUN_TASK_KWARGS['networkConfiguration'] = {
+            'awsvpcConfiguration': {
+                'subnets': conf.get('ecs_fargate', 'subnets').split(','),
+                'securityGroups': conf.get('ecs_fargate', 'security_groups').split(','),
+                'assignPublicIp': conf.get('ecs_fargate', 'assign_public_ip')
+            }
+        }
