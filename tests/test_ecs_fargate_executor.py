@@ -1,7 +1,7 @@
 import datetime as dt
 from unittest import TestCase, mock
 
-from airflow_aws_executors.ecs_fargate_plugin import (
+from airflow_aws_executors.ecs_fargate_executor import (
     AwsEcsFargateExecutor, BotoTaskSchema, EcsFargateTask, EcsFargateTaskCollection
 )
 from airflow.utils.state import State

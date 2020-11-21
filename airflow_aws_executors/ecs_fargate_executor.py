@@ -102,7 +102,7 @@ class AwsEcsFargateExecutor(BaseExecutor):
         self.active_workers = EcsFargateTaskCollection()
         self.pending_tasks = deque()
         self.ecs = boto3.client('ecs', region_name=region)  # noqa
-        self.run_task_kwargs = self.__load_run_kwargs()
+        self.run_task_kwargs = self._load_run_kwargs()
 
     def sync(self):
         self.sync_running_tasks()
@@ -259,7 +259,7 @@ class AwsEcsFargateExecutor(BaseExecutor):
             )
         self.end()
 
-    def __load_run_kwargs(self) -> dict:
+    def _load_run_kwargs(self) -> dict:
         run_kwargs = import_string(
             conf.get(
                 'ecs_fargate',

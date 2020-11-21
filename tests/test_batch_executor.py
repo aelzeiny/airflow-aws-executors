@@ -1,7 +1,7 @@
 import datetime as dt
 from unittest import TestCase, mock
 
-from airflow_aws_executors.batch_plugin import (
+from airflow_aws_executors.batch_executor import (
     AwsBatchExecutor, BatchJobDetailSchema, BatchJob, BatchJobCollection
 )
 from airflow.utils.state import State

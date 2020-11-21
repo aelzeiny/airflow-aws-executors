@@ -37,7 +37,7 @@ class BatchJob:
 
     def get_job_state(self) -> str:
         """
-        This is the primary logic that handles state in an AWS Batch Task
+        This is the primary logic that handles state in an AWS Batch Job
         """
         return self.STATE_MAPPINGS.get(self.status, State.QUEUED)
 
@@ -49,7 +49,7 @@ class AwsBatchExecutor(BaseExecutor):
     """
     The Airflow Scheduler creates a shell command, and passes it to the executor. This Batch Executor simply
     runs said airflow command on a remote AWS Batch Cluster with an job-definition configured
-    with the same containers as the Scheduler. It then periodically checks in with the launched tasks
+    with the same containers as the Scheduler. It then periodically checks in with the launched jobs
     (via job-ids) to determine the status.
     The `submit_job_kwargs` configuration points to a dictionary that returns a dictionary. The
     keys of the resulting dictionary should match the kwargs for the SubmitJob definition per AWS' documentation
@@ -75,7 +75,7 @@ class AwsBatchExecutor(BaseExecutor):
         self.submit_job_kwargs = None
 
     def start(self):
-        """Initialize Boto3 ECS Client, and other internal variables"""
+        """Initialize Boto3 Batch Client, and other internal variables"""
         region = conf.get('batch', 'region')
         self.active_workers = BatchJobCollection()
         self.batch = boto3.client('batch', region_name=region)
@@ -121,8 +121,8 @@ class AwsBatchExecutor(BaseExecutor):
         """
         Save the task to be executed in the next sync using Boto3's RunTask API
         """
-        if executor_config and ('name' in executor_config or 'command' in executor_config):
-            raise ValueError('Executor Config should never override "name" or "command"')
+        if executor_config and 'command' in executor_config:
+            raise ValueError('Executor Config should never override "command"')
         job_id = self._submit_job(command, executor_config or {})
         self.active_workers.add_job(job_id, key)
 
@@ -135,16 +135,16 @@ class AwsBatchExecutor(BaseExecutor):
         submit_job_api['containerOverrides'].update(exec_config)
         submit_job_api['containerOverrides']['command'] = cmd
         boto_run_task = self.batch.submit_job(**submit_job_api)
-        run_task_response = BatchSubmitJobResponseSchema().load(boto_run_task)
-        if run_task_response.errors:
-            self.log.error('ECS RunTask Response: %s', run_task_response)
+        submit_job_response = BatchSubmitJobResponseSchema().load(boto_run_task)
+        if submit_job_response.errors:
+            self.log.error('Batch SubmitJob Response: %s', submit_job_response)
             raise BatchError(
                 'RunTask API call does not match expected JSON shape. '
                 'Are you sure that the correct version of Boto3 is installed? {}'.format(
-                    run_task_response.errors
+                    submit_job_response.errors
                 )
             )
-        return run_task_response.data['job_id']
+        return submit_job_response.data['job_id']
 
     def end(self, heartbeat_interval=10):
         """
@@ -158,7 +158,7 @@ class AwsBatchExecutor(BaseExecutor):
 
     def terminate(self):
         """
-        Kill all ECS processes by calling Boto3's StopTask API.
+        Kill all Batch Jobs by calling Boto3's TerminateJob API.
         """
         for job_id in self.active_workers.get_all_jobs():
             self.batch.terminate_job(
@@ -177,7 +177,7 @@ class AwsBatchExecutor(BaseExecutor):
 
         if 'containerOverrides' not in submit_kwargs or 'command' not in submit_kwargs['containerOverrides']:
             raise KeyError('SubmitJob API needs kwargs["containerOverrides"]["command"] field,'
-                           ' and value should be NULL.')
+                           ' and value should be NULL or empty.')
         return submit_kwargs
 
 
@@ -206,7 +206,7 @@ class BatchJobCollection:
         return list(self.id_to_key.keys())
 
     def __len__(self):
-        """Determines the number of tasks in collection"""
+        """Determines the number of jobs in collection"""
         return len(self.key_to_id)
 
 
@@ -226,8 +226,8 @@ class BatchJobDetailSchema(Schema):
     status_reason = fields.String(load_from='statusReason')
 
     @post_load
-    def make_task(self, data, **kwargs):
-        """Overwrites marshmallow data property to return an instance of EcsFargateTask instead of a dictionary"""
+    def make_job(self, data, **kwargs):
+        """Overwrites marshmallow data property to return an instance of BatchJob instead of a dictionary"""
         return BatchJob(**data)
 
 
