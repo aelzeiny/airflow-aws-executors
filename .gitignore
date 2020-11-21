@@ -1,5 +1,6 @@
 dist
-airflow_ecs_fargate_executor.egg-info
+airflow_aws_executors.egg-info
 __pycache__
 .idea
 .vscode
+.pytest_cache
