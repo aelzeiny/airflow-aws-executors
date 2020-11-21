@@ -33,7 +33,7 @@ def has_option(section, config_name):
 
 
 BATCH_SUBMIT_JOB_KWARGS = {}
-if conf.has_section('batch'):
+if conf.has_option('batch', 'region'):
     BATCH_SUBMIT_JOB_KWARGS = {
         'jobName': conf.get('batch', 'job_name'),
         'jobQueue': conf.get('batch', 'job_queue'),
@@ -45,7 +45,7 @@ if conf.has_section('batch'):
 
 
 ECS_FARGATE_RUN_TASK_KWARGS = {}
-if conf.has_section('ecs_fargate'):
+if conf.has_option('ecs_fargate', 'region'):
     ECS_FARGATE_RUN_TASK_KWARGS = {
         'cluster': conf.get('ecs_fargate', 'cluster'),
         'taskDefinition': conf.get('ecs_fargate', 'task_definition'),
