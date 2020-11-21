@@ -10,8 +10,8 @@ or creating a new IAM role on EC2 [(see link)][boto_conf].
     from airflow_aws_executors import AwsBatchExecutor, AwsEcsFargateExecutor
     
     
-    class EcsFargatePlugin(AirflowPlugin):
-        """AWS ECS & AWS FARGATE Plugin"""
+    class AwsExecutorsPlugin(AirflowPlugin):
+        """AWS Batch & AWS ECS & AWS FARGATE Plugin"""
         name = "aws_executors_plugin"
         executors = [AwsBatchExecutor, AwsEcsFargateExecutor]
     ```
