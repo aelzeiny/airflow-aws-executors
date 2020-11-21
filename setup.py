@@ -12,7 +12,7 @@ except FileNotFoundError:
 
 setup(
     name="airflow-aws-executors",
-    version="0.12",
+    version="0.1.13",
     description=description,
     long_description=long_description,
     long_description_content_type="text/markdown",
