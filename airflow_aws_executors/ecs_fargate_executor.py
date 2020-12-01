@@ -386,7 +386,6 @@ class BotoTaskSchema(Schema):
     @post_load
     def make_task(self, data, **kwargs):
         """Overwrites marshmallow .data property to return an instance of EcsFargateTask instead of a dictionary"""
-        # print('postload task schema')
         return EcsFargateTask(**data)
 
 
