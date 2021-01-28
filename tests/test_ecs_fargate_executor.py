@@ -20,6 +20,7 @@ class TestEcsTaskCollection(TestCase):
         self.assertEqual(self.collection['001'], self.first_task)
         self.assertEqual(self.collection.task_by_key(self.first_airflow_key), self.first_task)
         self.assertEqual(self.collection.info_by_key(self.first_airflow_key).cmd, self.first_airflow_cmd)
+        self.assertEqual(self.collection.info_by_key(self.first_airflow_key).queue, self.first_airflow_queue)
         self.assertEqual(self.collection.info_by_key(self.first_airflow_key).config, self.first_airflow_exec_config)
 
         # Check basic get for second task
@@ -27,6 +28,7 @@ class TestEcsTaskCollection(TestCase):
         self.assertEqual(self.collection['002'], self.second_task)
         self.assertEqual(self.collection.task_by_key(self.second_airflow_key), self.second_task)
         self.assertEqual(self.collection.info_by_key(self.second_airflow_key).cmd, self.second_airflow_cmd)
+        self.assertEqual(self.collection.info_by_key(self.second_airflow_key).queue, self.second_airflow_queue)
         self.assertEqual(self.collection.info_by_key(self.second_airflow_key).config, self.second_airflow_exec_config)
 
     def test_list(self):
@@ -72,9 +74,10 @@ class TestEcsTaskCollection(TestCase):
         self.first_task.task_arn = '001'
         self.first_airflow_key = mock.Mock(spec=tuple)
         self.first_airflow_cmd = mock.Mock(spec=list)
+        self.first_airflow_queue = mock.Mock(spec=str)
         self.first_airflow_exec_config = mock.Mock(spec=dict)
         self.collection.add_task(
-            self.first_task, self.first_airflow_key,
+            self.first_task, self.first_airflow_key, self.first_airflow_queue,
             self.first_airflow_cmd, self.first_airflow_exec_config
         )
         # Add second task
@@ -82,9 +85,10 @@ class TestEcsTaskCollection(TestCase):
         self.second_task.task_arn = '002'
         self.second_airflow_key = mock.Mock(spec=tuple)
         self.second_airflow_cmd = mock.Mock(spec=list)
+        self.second_airflow_queue = mock.Mock(spec=str)
         self.second_airflow_exec_config = mock.Mock(spec=dict)
         self.collection.add_task(
-            self.second_task, self.second_airflow_key,
+            self.second_task, self.second_airflow_key, self.second_airflow_queue,
             self.second_airflow_cmd, self.second_airflow_exec_config
         )
 
@@ -207,8 +211,7 @@ class TestAwsEcsFargateExecutor(TestCase):
         """Test synch from end-to-end"""
         after_fargate_json = self.__mock_sync()
         loaded_fargate_json = BotoTaskSchema().load(after_fargate_json)
-        self.assertFalse(loaded_fargate_json.errors, msg='Mocked message is not like defined schema')
-        self.assertEqual(State.SUCCESS, loaded_fargate_json.data.get_task_state())
+        self.assertEqual(State.SUCCESS, loaded_fargate_json.get_task_state())
 
         self.executor.sync_running_tasks()
 
@@ -230,7 +233,7 @@ class TestAwsEcsFargateExecutor(TestCase):
 
         # set container's exit code to failure
         after_fargate_json['containers'][0]['exitCode'] = 100
-        self.assertEqual(State.FAILED, BotoTaskSchema().load(after_fargate_json).data.get_task_state())
+        self.assertEqual(State.FAILED, BotoTaskSchema().load(after_fargate_json).get_task_state())
         self.executor.sync()
 
         # ensure that run_task is called correctly as defined by Botocore docs
@@ -281,7 +284,7 @@ class TestAwsEcsFargateExecutor(TestCase):
         """Test that executor can shut everything down; forcing all tasks to unnaturally exit"""
         after_fargate_task = self.__mock_sync()
         after_fargate_task['containers'][0]['exitCode'] = 100
-        self.assertEqual(State.FAILED, BotoTaskSchema().load(after_fargate_task).data.get_task_state())
+        self.assertEqual(State.FAILED, BotoTaskSchema().load(after_fargate_task).get_task_state())
 
         self.executor.terminate()
 
@@ -316,15 +319,6 @@ class TestAwsEcsFargateExecutor(TestCase):
 
     def __set_mocked_executor(self):
         """Mock ECS such that there's nothing wrong with anything"""
-        from airflow.configuration import conf
-
-        if not conf.has_section('ecs_fargate'):
-            conf.add_section('ecs_fargate')
-        conf.set('ecs_fargate', 'region', 'us-west-1')
-        conf.set('ecs_fargate', 'cluster', 'some-ecs-cluster')
-        conf.set('ecs_fargate', 'task_definition', 'some-ecs-task-definition')
-        conf.set('ecs_fargate', 'container_name', 'some-ecs-container')
-        conf.set('ecs_fargate', 'launch_type', 'FARGATE')
         executor = AwsEcsFargateExecutor()
         executor.start()
 
@@ -350,8 +344,10 @@ class TestAwsEcsFargateExecutor(TestCase):
 
         airflow_cmd = mock.Mock(spec=list)
         airflow_key = mock.Mock(spec=tuple)
+        airflow_queue = mock.Mock(spec=str)
         airflow_exec_conf = mock.Mock(spec=dict)
-        self.executor.active_workers.add_task(before_fargate_task, airflow_key, airflow_cmd, airflow_exec_conf)
+        self.executor.active_workers.add_task(before_fargate_task, airflow_key, airflow_queue,
+                                              airflow_cmd, airflow_exec_conf)
 
         after_task_json = {
             'taskArn': 'ABC',

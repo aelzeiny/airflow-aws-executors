@@ -9,7 +9,7 @@ from airflow.configuration import conf
 from airflow.executors.base_executor import BaseExecutor
 from airflow.utils.module_loading import import_string
 from airflow.utils.state import State
-from marshmallow import Schema, fields, post_load
+from marshmallow import EXCLUDE, Schema, ValidationError, fields, post_load
 
 CommandType = List[str]
 TaskInstanceKeyType = Tuple[Any]
@@ -105,16 +105,17 @@ class AwsBatchExecutor(BaseExecutor):
         for i in range((len(job_ids) // max_batch_size) + 1):
             batched_job_ids = job_ids[i * max_batch_size: (i + 1) * max_batch_size]
             boto_describe_tasks = self.batch.describe_jobs(jobs=batched_job_ids)
-            describe_tasks_response = BatchDescribeJobsResponseSchema().load(boto_describe_tasks)
-            if describe_tasks_response.errors:
+            try:
+                describe_tasks_response = BatchDescribeJobsResponseSchema().load(boto_describe_tasks)
+            except ValidationError as err:
                 self.log.error('Batch DescribeJobs API Response: %s', boto_describe_tasks)
                 raise BatchError(
                     'DescribeJobs API call does not match expected JSON shape. '
                     'Are you sure that the correct version of Boto3 is installed? {}'.format(
-                        describe_tasks_response.errors
+                        err
                     )
                 )
-            all_jobs.extend(describe_tasks_response.data['jobs'])
+            all_jobs.extend(describe_tasks_response['jobs'])
         return all_jobs
 
     def execute_async(self, key: TaskInstanceKeyType, command: CommandType, queue=None, executor_config=None):
@@ -135,16 +136,17 @@ class AwsBatchExecutor(BaseExecutor):
         submit_job_api['containerOverrides'].update(exec_config)
         submit_job_api['containerOverrides']['command'] = cmd
         boto_run_task = self.batch.submit_job(**submit_job_api)
-        submit_job_response = BatchSubmitJobResponseSchema().load(boto_run_task)
-        if submit_job_response.errors:
-            self.log.error('Batch SubmitJob Response: %s', submit_job_response)
+        try:
+            submit_job_response = BatchSubmitJobResponseSchema().load(boto_run_task)
+        except ValidationError as err:
+            self.log.error('Batch SubmitJob Response: %s', err)
             raise BatchError(
                 'RunTask API call does not match expected JSON shape. '
                 'Are you sure that the correct version of Boto3 is installed? {}'.format(
-                    submit_job_response.errors
+                    err
                 )
             )
-        return submit_job_response.data['job_id']
+        return submit_job_response['job_id']
 
     def end(self, heartbeat_interval=10):
         """
@@ -213,28 +215,37 @@ class BatchJobCollection:
 class BatchSubmitJobResponseSchema(Schema):
     """API Response for SubmitJob"""
     # The unique identifier for the job.
-    job_id = fields.String(load_from='jobId', required=True)
+    job_id = fields.String(data_key='jobId', required=True)
+
+    class Meta:
+        unknown = EXCLUDE
 
 
 class BatchJobDetailSchema(Schema):
     """API Response for Describe Jobs"""
     # The unique identifier for the job.
-    job_id = fields.String(load_from='jobId', required=True)
+    job_id = fields.String(data_key='jobId', required=True)
     # The current status for the job: 'SUBMITTED', 'PENDING', 'RUNNABLE', 'STARTING', 'RUNNING', 'SUCCEEDED', 'FAILED'
     status = fields.String(required=True)
     # A short, human-readable string to provide additional details about the current status of the job.
-    status_reason = fields.String(load_from='statusReason')
+    status_reason = fields.String(data_key='statusReason')
 
     @post_load
     def make_job(self, data, **kwargs):
-        """Overwrites marshmallow data property to return an instance of BatchJob instead of a dictionary"""
+        """Overwrites marshmallow load() to return an instance of BatchJob instead of a dictionary"""
         return BatchJob(**data)
+
+    class Meta:
+        unknown = EXCLUDE
 
 
 class BatchDescribeJobsResponseSchema(Schema):
     """API Response for Describe Jobs"""
     # The list of jobs
     jobs = fields.List(fields.Nested(BatchJobDetailSchema), required=True)
+
+    class Meta:
+        unknown = EXCLUDE
 
 
 class BatchError(Exception):

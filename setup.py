@@ -12,7 +12,7 @@ except FileNotFoundError:
 
 setup(
     name="airflow-aws-executors",
-    version="1.0.0",
+    version="1.1.0",
     description=description,
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -29,5 +29,5 @@ setup(
     ],
     packages=["airflow_aws_executors"],
     include_package_data=True,
-    install_requires=["boto3", "apache-airflow>=1.10.5"]
+    install_requires=["boto3", "apache-airflow>=1.10.5", "marshmallow>=3"]
 )

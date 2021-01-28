@@ -112,8 +112,7 @@ class TestAwsBatchExecutor(TestCase):
 
         # sanity check that container's status code is mocked to success
         loaded_batch_job = BatchJobDetailSchema().load(after_sync_reponse)
-        self.assertFalse(loaded_batch_job.errors, msg='Mocked message is not like defined schema')
-        self.assertEqual(State.SUCCESS, loaded_batch_job.data.get_job_state())
+        self.assertEqual(State.SUCCESS, loaded_batch_job.get_job_state())
 
         self.executor.sync()
 
@@ -135,7 +134,7 @@ class TestAwsBatchExecutor(TestCase):
 
         # set container's status code to failure & sanity-check
         after_sync_reponse['status'] = 'FAILED'
-        self.assertEqual(State.FAILED, BatchJobDetailSchema().load(after_sync_reponse).data.get_job_state())
+        self.assertEqual(State.FAILED, BatchJobDetailSchema().load(after_sync_reponse).get_job_state())
         self.executor.sync()
 
         # ensure that run_task is called correctly as defined by Botocore docs
@@ -152,7 +151,7 @@ class TestAwsBatchExecutor(TestCase):
         """Test that executor can shut everything down; forcing all tasks to unnaturally exit"""
         mocked_job_json = self.__mock_sync()
         mocked_job_json['status'] = 'FAILED'
-        self.assertEqual(State.FAILED, BatchJobDetailSchema().load(mocked_job_json).data.get_job_state())
+        self.assertEqual(State.FAILED, BatchJobDetailSchema().load(mocked_job_json).get_job_state())
 
         self.executor.terminate()
 
@@ -190,13 +189,6 @@ class TestAwsBatchExecutor(TestCase):
     def __set_mocked_executor(self):
         """Mock ECS such that there's nothing wrong with anything"""
         from airflow.configuration import conf
-
-        if not conf.has_section('batch'):
-            conf.add_section('batch')
-        conf.set('batch', 'region', 'us-west-1')
-        conf.set('batch', 'job_name', 'some-job-name')
-        conf.set('batch', 'job_queue', 'some-job-queue')
-        conf.set('batch', 'job_definition', 'some-job-def')
         executor = AwsBatchExecutor()
         executor.start()
 

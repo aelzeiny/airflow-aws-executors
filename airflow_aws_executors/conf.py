@@ -25,7 +25,8 @@ https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.h
 from airflow.configuration import conf
 
 
-def has_option(section, config_name):
+def has_option(section, config_name) -> bool:
+    """Returns True if configuration has a section and an option"""
     if conf.has_option(section, config_name):
         config_val = conf.get(section, config_name)
         return config_val is not None and config_val != ''
