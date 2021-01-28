@@ -15,9 +15,9 @@ from marshmallow import Schema, fields, post_load
 CommandType = List[str]
 TaskInstanceKeyType = Tuple[Any]
 ExecutorConfigFunctionType = Callable[[CommandType], dict]
-EcsFargateQueuedTask = namedtuple('EcsFargateQueuedTask', ('key', 'command', 'executor_config'))
+EcsFargateQueuedTask = namedtuple('EcsFargateQueuedTask', ('key', 'command', 'queue', 'executor_config'))
 ExecutorConfigType = Dict[str, Any]
-EcsFargateTaskInfo = namedtuple('EcsFargateTaskInfo', ('cmd', 'config'))
+EcsFargateTaskInfo = namedtuple('EcsFargateTaskInfo', ('cmd', 'queue', 'config'))
 
 
 class EcsFargateTask:
@@ -166,14 +166,14 @@ class AwsEcsFargateExecutor(BaseExecutor):
         ECS/Fargate Cloud. If an API failure occurs the task is simply rescheduled.
         """
         task_key = self.active_workers.arn_to_key[task_arn]
-        task_cmd, exec_info = self.active_workers.info_by_key(task_key)
+        task_cmd, queue, exec_info = self.active_workers.info_by_key(task_key)
         failure_count = self.active_workers.failure_count_by_key(task_key)
         if failure_count < self.__class__.MAX_FAILURE_CHECKS:
             self.log.warning('Task %s has failed due to %s. '
                              'Failure %s out of %s occurred on %s. Rescheduling.',
                              task_key, reason, failure_count, self.__class__.MAX_FAILURE_CHECKS, task_arn)
             self.active_workers.increment_failure_count(task_key)
-            self.pending_tasks.appendleft(EcsFargateQueuedTask(task_key, task_cmd, exec_info))
+            self.pending_tasks.appendleft(EcsFargateQueuedTask(task_key, task_cmd, queue, exec_info))
         else:
             self.log.error('Task %s has failed a maximum of %s times. Marking as failed', task_key,
                            failure_count)
@@ -192,8 +192,8 @@ class AwsEcsFargateExecutor(BaseExecutor):
         failure_reasons = defaultdict(int)
         for _ in range(queue_len):
             ecs_task = self.pending_tasks.popleft()
-            task_key, cmd, exec_config = ecs_task
-            run_task_response = self.__run_task(cmd, exec_config)
+            task_key, cmd, queue, exec_config = ecs_task
+            run_task_response = self._run_task(task_key, cmd, queue, exec_config)
             if run_task_response['failures']:
                 for f in run_task_response['failures']:
                     failure_reasons[f['reason']] += 1
@@ -208,15 +208,14 @@ class AwsEcsFargateExecutor(BaseExecutor):
             self.log.debug('Pending tasks failed to launch for the following reasons: %s. Will retry later.',
                            dict(failure_reasons))
 
-    def __run_task(self, cmd: CommandType, exec_config: ExecutorConfigType):
+    def _run_task(self, task_id: TaskInstanceKeyType, cmd: CommandType, queue: str, exec_config: ExecutorConfigType):
         """
+        This function is the actual attempt to run a queued-up airflow task. Not to be confused with
+        execute_async() which inserts tasks into the queue.
         The command and executor config will be placed in the container-override section of the JSON request, before
         calling Boto3's "run_task" function.
         """
-        run_task_api = deepcopy(self.run_task_kwargs)
-        container_override = self.get_container(run_task_api['overrides']['containerOverrides'])
-        container_override['command'] = cmd
-        container_override.update(exec_config)
+        run_task_api = self._run_task_kwargs(task_id, cmd, queue, exec_config)
         boto_run_task = self.ecs.run_task(**run_task_api)
         run_task_response = BotoRunTaskSchema().load(boto_run_task)
         if run_task_response.errors:
@@ -229,13 +228,27 @@ class AwsEcsFargateExecutor(BaseExecutor):
             )
         return run_task_response.data
 
+    def _run_task_kwargs(self, task_id: TaskInstanceKeyType, cmd: CommandType,
+                         queue: str, exec_config: ExecutorConfigType) -> dict:
+        """
+        This modifies the standard kwargs to be specific to this task by overriding the airflow command and updating
+        the container overrides.
+
+        One last chance to modify Boto3's "run_task" kwarg params before it gets passed into the Boto3 client.
+        """
+        run_task_api = deepcopy(self.run_task_kwargs)
+        container_override = self.get_container(run_task_api['overrides']['containerOverrides'])
+        container_override['command'] = cmd
+        container_override.update(exec_config)
+        return run_task_api
+
     def execute_async(self, key: TaskInstanceKeyType, command: CommandType, queue=None, executor_config=None):
         """
-        Save the task to be executed in the next sync using Boto3's RunTask API
+        Save the task to be executed in the next sync by inserting the commands into a queue.
         """
         if executor_config and ('name' in executor_config or 'command' in executor_config):
             raise ValueError('Executor Config should never override "name" or "command"')
-        self.pending_tasks.append(EcsFargateQueuedTask(key, command, executor_config or {}))
+        self.pending_tasks.append(EcsFargateQueuedTask(key, command, queue, executor_config or {}))
 
     def end(self, heartbeat_interval=10):
         """
@@ -299,13 +312,13 @@ class EcsFargateTaskCollection:
         self.key_to_task_info: Dict[TaskInstanceKeyType, EcsFargateTaskInfo] = {}
 
     def add_task(self, task: EcsFargateTask, airflow_task_key: TaskInstanceKeyType, airflow_cmd: CommandType,
-                 exec_config: ExecutorConfigType):
+                 queue: str, exec_config: ExecutorConfigType):
         """Adds a task to the collection"""
         arn = task.task_arn
         self.tasks[arn] = task
         self.key_to_arn[airflow_task_key] = arn
         self.arn_to_key[arn] = airflow_task_key
-        self.key_to_task_info[airflow_task_key] = EcsFargateTaskInfo(airflow_cmd, exec_config)
+        self.key_to_task_info[airflow_task_key] = EcsFargateTaskInfo(airflow_cmd, queue, exec_config)
 
     def update_task(self, task: EcsFargateTask):
         """Updates the state of the given task based on task ARN"""
