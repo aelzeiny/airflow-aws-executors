@@ -203,7 +203,7 @@ class AwsEcsFargateExecutor(BaseExecutor):
                 raise EcsFargateError('No failures and no tasks provided in response. This should never happen.')
             else:
                 task = run_task_response['tasks'][0]
-                self.active_workers.add_task(task, task_key, cmd, exec_config)
+                self.active_workers.add_task(task, task_key, queue, cmd, exec_config)
         if failure_reasons:
             self.log.debug('Pending tasks failed to launch for the following reasons: %s. Will retry later.',
                            dict(failure_reasons))
@@ -311,8 +311,8 @@ class EcsFargateTaskCollection:
         self.key_to_failure_counts: Dict[TaskInstanceKeyType, int] = defaultdict(int)
         self.key_to_task_info: Dict[TaskInstanceKeyType, EcsFargateTaskInfo] = {}
 
-    def add_task(self, task: EcsFargateTask, airflow_task_key: TaskInstanceKeyType, airflow_cmd: CommandType,
-                 queue: str, exec_config: ExecutorConfigType):
+    def add_task(self, task: EcsFargateTask, airflow_task_key: TaskInstanceKeyType, queue: str,
+                 airflow_cmd: CommandType, exec_config: ExecutorConfigType):
         """Adds a task to the collection"""
         arn = task.task_arn
         self.tasks[arn] = task

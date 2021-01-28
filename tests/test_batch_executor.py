@@ -190,13 +190,6 @@ class TestAwsBatchExecutor(TestCase):
     def __set_mocked_executor(self):
         """Mock ECS such that there's nothing wrong with anything"""
         from airflow.configuration import conf
-
-        if not conf.has_section('batch'):
-            conf.add_section('batch')
-        conf.set('batch', 'region', 'us-west-1')
-        conf.set('batch', 'job_name', 'some-job-name')
-        conf.set('batch', 'job_queue', 'some-job-queue')
-        conf.set('batch', 'job_definition', 'some-job-def')
         executor = AwsBatchExecutor()
         executor.start()
 
