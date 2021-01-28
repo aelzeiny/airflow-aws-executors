@@ -211,8 +211,7 @@ class TestAwsEcsFargateExecutor(TestCase):
         """Test synch from end-to-end"""
         after_fargate_json = self.__mock_sync()
         loaded_fargate_json = BotoTaskSchema().load(after_fargate_json)
-        self.assertFalse(loaded_fargate_json.errors, msg='Mocked message is not like defined schema')
-        self.assertEqual(State.SUCCESS, loaded_fargate_json.data.get_task_state())
+        self.assertEqual(State.SUCCESS, loaded_fargate_json.get_task_state())
 
         self.executor.sync_running_tasks()
 
@@ -234,7 +233,7 @@ class TestAwsEcsFargateExecutor(TestCase):
 
         # set container's exit code to failure
         after_fargate_json['containers'][0]['exitCode'] = 100
-        self.assertEqual(State.FAILED, BotoTaskSchema().load(after_fargate_json).data.get_task_state())
+        self.assertEqual(State.FAILED, BotoTaskSchema().load(after_fargate_json).get_task_state())
         self.executor.sync()
 
         # ensure that run_task is called correctly as defined by Botocore docs
@@ -285,7 +284,7 @@ class TestAwsEcsFargateExecutor(TestCase):
         """Test that executor can shut everything down; forcing all tasks to unnaturally exit"""
         after_fargate_task = self.__mock_sync()
         after_fargate_task['containers'][0]['exitCode'] = 100
-        self.assertEqual(State.FAILED, BotoTaskSchema().load(after_fargate_task).data.get_task_state())
+        self.assertEqual(State.FAILED, BotoTaskSchema().load(after_fargate_task).get_task_state())
 
         self.executor.terminate()
 

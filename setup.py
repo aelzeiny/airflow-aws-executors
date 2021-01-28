@@ -29,5 +29,5 @@ setup(
     ],
     packages=["airflow_aws_executors"],
     include_package_data=True,
-    install_requires=["boto3", "apache-airflow>=1.10.5"]
+    install_requires=["boto3", "apache-airflow>=1.10.5", "marshmallow>=3"]
 )

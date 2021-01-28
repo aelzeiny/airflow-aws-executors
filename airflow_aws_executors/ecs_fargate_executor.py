@@ -10,7 +10,7 @@ from airflow.configuration import conf
 from airflow.executors.base_executor import BaseExecutor
 from airflow.utils.module_loading import import_string
 from airflow.utils.state import State
-from marshmallow import Schema, fields, post_load
+from marshmallow import EXCLUDE, Schema, ValidationError, fields, post_load
 
 CommandType = List[str]
 TaskInstanceKeyType = Tuple[Any]
@@ -147,17 +147,18 @@ class AwsEcsFargateExecutor(BaseExecutor):
         for i in range((len(task_arns) // self.DESCRIBE_TASKS_BATCH_SIZE) + 1):
             batched_task_arns = task_arns[i * self.DESCRIBE_TASKS_BATCH_SIZE: (i + 1) * self.DESCRIBE_TASKS_BATCH_SIZE]
             boto_describe_tasks = self.ecs.describe_tasks(tasks=batched_task_arns, cluster=self.cluster)
-            describe_tasks_response = BotoDescribeTasksSchema().load(boto_describe_tasks)
-            if describe_tasks_response.errors:
+            try:
+                describe_tasks_response = BotoDescribeTasksSchema().load(boto_describe_tasks)
+            except ValidationError as err:
                 self.log.error('ECS DescribeTask Response: %s', boto_describe_tasks)
                 raise EcsFargateError(
                     'DescribeTasks API call does not match expected JSON shape. '
                     'Are you sure that the correct version of Boto3 is installed? {}'.format(
-                        describe_tasks_response.errors
+                        err
                     )
                 )
-            all_task_descriptions['tasks'].extend(describe_tasks_response.data['tasks'])
-            all_task_descriptions['failures'].extend(describe_tasks_response.data['failures'])
+            all_task_descriptions['tasks'].extend(describe_tasks_response['tasks'])
+            all_task_descriptions['failures'].extend(describe_tasks_response['failures'])
         return all_task_descriptions
 
     def __handle_failed_task(self, task_arn: str, reason: str):
@@ -217,16 +218,17 @@ class AwsEcsFargateExecutor(BaseExecutor):
         """
         run_task_api = self._run_task_kwargs(task_id, cmd, queue, exec_config)
         boto_run_task = self.ecs.run_task(**run_task_api)
-        run_task_response = BotoRunTaskSchema().load(boto_run_task)
-        if run_task_response.errors:
-            self.log.error('ECS RunTask Response: %s', run_task_response)
+        try:
+            run_task_response = BotoRunTaskSchema().load(boto_run_task)
+        except ValidationError as err:
+            self.log.error('ECS RunTask Response: %s', err)
             raise EcsFargateError(
                 'RunTask API call does not match expected JSON shape. '
                 'Are you sure that the correct version of Boto3 is installed? {}'.format(
-                    run_task_response.errors
+                    err
                 )
             )
-        return run_task_response.data
+        return run_task_response
 
     def _run_task_kwargs(self, task_id: TaskInstanceKeyType, cmd: CommandType,
                          queue: str, exec_config: ExecutorConfigType) -> dict:
@@ -379,9 +381,12 @@ class BotoContainerSchema(Schema):
     Botocore Serialization Object for ECS 'Container' shape.
     Note that there are many more parameters, but the executor only needs the members listed below.
     """
-    exit_code = fields.Integer(load_from='exitCode')
-    last_status = fields.String(load_from='lastStatus')
+    exit_code = fields.Integer(data_key='exitCode')
+    last_status = fields.String(data_key='lastStatus')
     name = fields.String(required=True)
+
+    class Meta:
+        unknown = EXCLUDE
 
 
 class BotoTaskSchema(Schema):
@@ -389,17 +394,20 @@ class BotoTaskSchema(Schema):
     Botocore Serialization Object for ECS 'Task' shape.
     Note that there are many more parameters, but the executor only needs the members listed below.
     """
-    task_arn = fields.String(load_from='taskArn', required=True)
-    last_status = fields.String(load_from='lastStatus', required=True)
-    desired_status = fields.String(load_from='desiredStatus', required=True)
+    task_arn = fields.String(data_key='taskArn', required=True)
+    last_status = fields.String(data_key='lastStatus', required=True)
+    desired_status = fields.String(data_key='desiredStatus', required=True)
     containers = fields.List(fields.Nested(BotoContainerSchema), required=True)
-    started_at = fields.Field(load_from='startedAt')
-    stopped_reason = fields.String(load_from='stoppedReason')
+    started_at = fields.Field(data_key='startedAt')
+    stopped_reason = fields.String(data_key='stoppedReason')
 
     @post_load
     def make_task(self, data, **kwargs):
-        """Overwrites marshmallow .data property to return an instance of EcsFargateTask instead of a dictionary"""
+        """Overwrites marshmallow load() to return an instance of EcsFargateTask instead of a dictionary"""
         return EcsFargateTask(**data)
+
+    class Meta:
+        unknown = EXCLUDE
 
 
 class BotoFailureSchema(Schema):
@@ -409,6 +417,9 @@ class BotoFailureSchema(Schema):
     arn = fields.String()
     reason = fields.String()
 
+    class Meta:
+        unknown = EXCLUDE
+
 
 class BotoRunTaskSchema(Schema):
     """
@@ -417,6 +428,9 @@ class BotoRunTaskSchema(Schema):
     tasks = fields.List(fields.Nested(BotoTaskSchema), required=True)
     failures = fields.List(fields.Nested(BotoFailureSchema), required=True)
 
+    class Meta:
+        unknown = EXCLUDE
+
 
 class BotoDescribeTasksSchema(Schema):
     """
@@ -424,6 +438,9 @@ class BotoDescribeTasksSchema(Schema):
     """
     tasks = fields.List(fields.Nested(BotoTaskSchema), required=True)
     failures = fields.List(fields.Nested(BotoFailureSchema), required=True)
+
+    class Meta:
+        unknown = EXCLUDE
 
 
 class EcsFargateError(Exception):
