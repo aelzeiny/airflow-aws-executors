@@ -149,6 +149,11 @@ class AwsBatchExecutor(BaseExecutor):
         """
         Save the task to be executed in the next sync using Boto3's RunTask API
         """
+
+        # We know we will always have a queue here but we keep the same signature
+        # of the BaseExecutor so make the type system happy by asserting its not None
+        assert queue is not None
+
         if executor_config and 'command' in executor_config:
             raise ValueError('Executor Config should never override "command"')
 
@@ -159,7 +164,7 @@ class AwsBatchExecutor(BaseExecutor):
         self,
         cmd: CommandType,
         exec_config: ExecutorConfigType,
-        queue: Optional[str] = None,
+        queue: str,
     ) -> str:
         """
         The command and executor config will be placed in the container-override section of the JSON request, before
@@ -169,8 +174,7 @@ class AwsBatchExecutor(BaseExecutor):
         submit_job_api['containerOverrides'].update(exec_config)
         submit_job_api['containerOverrides']['command'] = cmd
 
-        if queue:
-            submit_job_api['jobQueue'] = queue
+        submit_job_api['jobQueue'] = queue
 
         boto_run_task = self.batch.submit_job(**submit_job_api)
         try:

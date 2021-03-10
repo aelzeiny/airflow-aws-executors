@@ -126,6 +126,11 @@ task = PythonOperator(
 
 ## Airflow Configurations
 #### Batch
+`[operators]`
+* `default_queue`
+    * **description**: The name of AWS Batch Queue in which tasks are submitted
+    * **example**: airflow-job-queue
+
 `[batch]`
 * `region` 
     * **description**: The name of AWS Region
@@ -134,9 +139,6 @@ task = PythonOperator(
 * `job_name`
     * **description**: The name of airflow job
     * **example**: airflow-job-name
-* `job_queue`
-    * **description**: The name of AWS Batch Queue in which tasks are submitted
-    * **example**: airflow-job-queue
 * `job_definition`
     * **description**: The name of the AWS Batch Job Definition; optionally includes revision number
     * **example**: airflow-job-definition or airflow-job-definition:2

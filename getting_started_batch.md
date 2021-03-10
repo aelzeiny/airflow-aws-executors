@@ -27,10 +27,11 @@ Build this image and upload it to a private repository. You may want to use Dock
     ENV AIRFLOW__CORE__EXECUTOR aws_executors_plugin.AwsBatchExecutor
     ENV AIRFLOW__CORE__PARALLELISM 30
     ENV AIRFLOW__CORE__DAG_CONCURRENCY 30
+
+    ENV AIRFLOW__OPERATOR__DEFAULT_QUEUE airflow-job-queue
    
     ENV AIRFLOW__BATCH__REGION us-west-1
     ENV AIRFLOW__BATCH__JOB_NAME airflow-task
-    ENV AIRFLOW__BATCH__JOB_QUEUE airflow-job-queue
     ENV AIRFLOW__BATCH__JOB_DEFINITION airflow-job-defined
    
     RUN airflow connections -a --conn_id remote_logging --conn_type s3

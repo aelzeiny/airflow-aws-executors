@@ -37,7 +37,6 @@ BATCH_SUBMIT_JOB_KWARGS = {}
 if conf.has_option('batch', 'region'):
     BATCH_SUBMIT_JOB_KWARGS = {
         'jobName': conf.get('batch', 'job_name'),
-        'jobQueue': conf.get('batch', 'job_queue'),
         'jobDefinition': conf.get('batch', 'job_definition'),
         'containerOverrides': {
             'command': []
