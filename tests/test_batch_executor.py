@@ -101,8 +101,24 @@ class TestAwsBatchExecutor(TestCase):
         self.executor.batch.submit_job.assert_called_once()
         self.assert_botocore_call('SubmitJob', *self.executor.batch.submit_job.call_args)
 
+        # check we sent the default queue
+        _, kwargs = self.executor.batch.submit_job.call_args
+        self.assertEqual(kwargs['jobQueue'], 'some-job-queue')
+
         # task is stored in active worker
         self.assertEqual(1, len(self.executor.active_workers))
+
+    def test_execute_non_default_queue(self):
+        """Test execution non default queue"""
+        airflow_key = mock.Mock(spec=tuple)
+        airflow_cmd = mock.Mock(spec=list)
+        queue = "non-default-queue"
+
+        self.executor.execute_async(airflow_key, airflow_cmd, queue=queue)
+
+        # check we sent the non default queue
+        _, kwargs = self.executor.batch.submit_job.call_args
+        self.assertEqual(kwargs['jobQueue'], queue)
 
     @mock.patch('airflow.executors.base_executor.BaseExecutor.fail')
     @mock.patch('airflow.executors.base_executor.BaseExecutor.success')

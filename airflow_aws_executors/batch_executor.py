@@ -118,16 +118,28 @@ class AwsBatchExecutor(BaseExecutor):
             all_jobs.extend(describe_tasks_response['jobs'])
         return all_jobs
 
-    def execute_async(self, key: TaskInstanceKeyType, command: CommandType, queue=None, executor_config=None):
+    def execute_async(
+        self,
+        key: TaskInstanceKeyType,
+        command: CommandType,
+        queue: Optional[str] = None,
+        executor_config=None
+    ):
         """
         Save the task to be executed in the next sync using Boto3's RunTask API
         """
         if executor_config and 'command' in executor_config:
             raise ValueError('Executor Config should never override "command"')
-        job_id = self._submit_job(command, executor_config or {})
+
+        job_id = self._submit_job(command, executor_config or {}, queue=queue)
         self.active_workers.add_job(job_id, key)
 
-    def _submit_job(self, cmd: CommandType, exec_config: ExecutorConfigType) -> str:
+    def _submit_job(
+        self,
+        cmd: CommandType,
+        exec_config: ExecutorConfigType,
+        queue: Optional[str] = None,
+    ) -> str:
         """
         The command and executor config will be placed in the container-override section of the JSON request, before
         calling Boto3's "run_task" function.
@@ -135,6 +147,10 @@ class AwsBatchExecutor(BaseExecutor):
         submit_job_api = deepcopy(self.submit_job_kwargs)
         submit_job_api['containerOverrides'].update(exec_config)
         submit_job_api['containerOverrides']['command'] = cmd
+
+        if queue:
+            submit_job_api['jobQueue'] = queue
+
         boto_run_task = self.batch.submit_job(**submit_job_api)
         try:
             submit_job_response = BatchSubmitJobResponseSchema().load(boto_run_task)
