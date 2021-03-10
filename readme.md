@@ -89,7 +89,7 @@ I almost always recommend that you go the AWS Batch or AWS Fargate route unless 
 This means that you can specify CPU, Memory, env vars, and GPU requirements on a task.
 
 #### AWS Batch
-Specifying an executor config will be merged directly into the [Batch.submit_job()][submit_job] request kwarg.
+Specifying an executor config will be merged directly into `containerOverrides` key of the [Batch.submit_job()][submit_job] request kwarg.
 
 For example:
 ```python
@@ -98,10 +98,8 @@ task = PythonOperator(
     python_callable=lambda *args, **kwargs: print('hello world'),
     task_id='say_hello',
     executor_config=dict(
-        containerOverrides=dict(
-            vcpus=1,  # no fractional CPUs
-            memory=512
-        )
+        vcpus=1,  # no fractional CPUs
+        memory=512
     ),
     dag=dag
 )
