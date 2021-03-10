@@ -99,6 +99,27 @@ class AwsBatchExecutor(BaseExecutor):
                 task_key = self.active_workers.pop_by_id(job.job_id)
                 self.success(task_key)
 
+    def trigger_tasks(self, open_slots: int) -> None:
+        """
+        Triggers tasks
+
+        :param open_slots: Number of open slots
+
+        We override this func as Airflow does not pass the queue in BaseExecutor
+        """
+        sorted_queue = self.order_queued_tasks_by_priority()
+
+        for _ in range(min((open_slots, len(self.queued_tasks)))):
+            key, (command, _, queue, ti) = sorted_queue.pop(0)
+            self.queued_tasks.pop(key)
+            self.running.add(key)
+            self.execute_async(
+                key=key,
+                command=command,
+                queue=queue,
+                executor_config=ti.executor_config
+            )
+
     def _describe_tasks(self, job_ids) -> List[BatchJob]:
         all_jobs = []
         max_batch_size = self.__class__.DESCRIBE_JOBS_BATCH_SIZE
