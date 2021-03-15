@@ -1,8 +1,19 @@
+dist: xenial
 language: python
 python:
   - "3.6"      # current default Python on Travis CI
   - "3.7"
   - "3.8"
+before_install:
+  - sudo apt-get autoremove sqlite3
+  - sudo apt-get install python-software-properties
+  - sudo apt-add-repository -y ppa:travis-ci/sqlite3
+  - sudo apt-get -y update
+  - sudo apt-cache show sqlite3
+  - sudo apt-get install sqlite3=3.7.15.1-1~travis1
+  - sudo sqlite3 -version
+  - sudo psql --version
+  - sudo mysql --version
 install:
   - pip install apache-airflow boto3 pylint isort marshmallow
 env:
