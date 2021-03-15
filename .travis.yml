@@ -1,19 +1,18 @@
+dist: xenial
 language: python
 python:
   - "3.6"      # current default Python on Travis CI
   - "3.7"
   - "3.8"
-before_install:
-  - sudo apt-get autoremove sqlite3
-  - sudo apt-get install python-software-properties
-  - sudo apt-add-repository -y ppa:travis-ci/sqlite3
-  - sudo apt-get -y update
-  - sudo apt-cache show sqlite3
-  - sudo apt-get install sqlite3=3.7.15.1-1~travis1
+services:
+  - postgresql
 install:
-  - pip install apache-airflow boto3 pylint isort marshmallow
+  - pip install apache-airflow[postgres] boto3 pylint isort marshmallow
 env:
-  - AIRFLOW__BATCH__REGION=us-west-1 AIRFLOW__BATCH__JOB_NAME=some-job-name AIRFLOW__BATCH__JOB_QUEUE=some-job-queue AIRFLOW__BATCH__JOB_DEFINITION=some-job-def AIRFLOW__ECS_FARGATE__REGION=us-west-1 AIRFLOW__ECS_FARGATE__CLUSTER=some-cluster AIRFLOW__ECS_FARGATE__CONTAINER_NAME=some-container-name AIRFLOW__ECS_FARGATE__TASK_DEFINITION=some-task-def AIRFLOW__ECS_FARGATE__LAUNCH_TYPE=FARGATE AIRFLOW__ECS_FARGATE__PLATFORM_VERSION=LATEST AIRFLOW__ECS_FARGATE__ASSIGN_PUBLIC_IP=DISABLED AIRFLOW__ECS_FARGATE__SECURITY_GROUPS=SG1,SG2 AIRFLOW__ECS_FARGATE__SUBNETS=SUB1,SUB2
+  - AIRFLOW__BATCH__REGION=us-west-1 AIRFLOW__BATCH__JOB_NAME=some-job-name AIRFLOW__BATCH__JOB_QUEUE=some-job-queue AIRFLOW__BATCH__JOB_DEFINITION=some-job-def AIRFLOW__ECS_FARGATE__REGION=us-west-1 AIRFLOW__ECS_FARGATE__CLUSTER=some-cluster AIRFLOW__ECS_FARGATE__CONTAINER_NAME=some-container-name AIRFLOW__ECS_FARGATE__TASK_DEFINITION=some-task-def AIRFLOW__ECS_FARGATE__LAUNCH_TYPE=FARGATE AIRFLOW__ECS_FARGATE__PLATFORM_VERSION=LATEST AIRFLOW__ECS_FARGATE__ASSIGN_PUBLIC_IP=DISABLED AIRFLOW__ECS_FARGATE__SECURITY_GROUPS=SG1,SG2 AIRFLOW__ECS_FARGATE__SUBNETS=SUB1,SUB2 AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:@localhost:5432/airflow
+before_script:
+  - psql -c 'create database airflow;' -U postgres
+  - airflow initdb
 script:
   - pylint --fail-under=9 ./airflow_aws_executors
   - isort -c -rc ./airflow_aws_executors
