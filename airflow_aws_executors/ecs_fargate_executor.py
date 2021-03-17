@@ -144,8 +144,10 @@ class AwsEcsFargateExecutor(BaseExecutor):
 
     def __describe_tasks(self, task_arns):
         all_task_descriptions = {'tasks': [], 'failures': []}
-        for i in range((len(task_arns) // self.DESCRIBE_TASKS_BATCH_SIZE) + 1):
-            batched_task_arns = task_arns[i * self.DESCRIBE_TASKS_BATCH_SIZE: (i + 1) * self.DESCRIBE_TASKS_BATCH_SIZE]
+        for i in range(0, len(task_arns), self.DESCRIBE_TASKS_BATCH_SIZE):
+            batched_task_arns = task_arns[i: i + self.DESCRIBE_TASKS_BATCH_SIZE]
+            if not batched_task_arns:
+                continue
             boto_describe_tasks = self.ecs.describe_tasks(tasks=batched_task_arns, cluster=self.cluster)
             try:
                 describe_tasks_response = BotoDescribeTasksSchema().load(boto_describe_tasks)

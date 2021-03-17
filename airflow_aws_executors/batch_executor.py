@@ -101,9 +101,10 @@ class AwsBatchExecutor(BaseExecutor):
 
     def _describe_tasks(self, job_ids) -> List[BatchJob]:
         all_jobs = []
-        max_batch_size = self.__class__.DESCRIBE_JOBS_BATCH_SIZE
-        for i in range((len(job_ids) // max_batch_size) + 1):
-            batched_job_ids = job_ids[i * max_batch_size: (i + 1) * max_batch_size]
+        for i in range(0, len(job_ids), self.__class__.DESCRIBE_JOBS_BATCH_SIZE):
+            batched_job_ids = job_ids[i: i + self.__class__.DESCRIBE_JOBS_BATCH_SIZE]
+            if not batched_job_ids:
+                continue
             boto_describe_tasks = self.batch.describe_jobs(jobs=batched_job_ids)
             try:
                 describe_tasks_response = BatchDescribeJobsResponseSchema().load(boto_describe_tasks)
