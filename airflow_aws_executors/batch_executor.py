@@ -125,17 +125,20 @@ class AwsBatchExecutor(BaseExecutor):
         """
         if executor_config and 'command' in executor_config:
             raise ValueError('Executor Config should never override "command"')
-        job_id = self._submit_job(command, executor_config or {})
+        job_id = self._submit_job(key, command, queue, executor_config or {})
         self.active_workers.add_job(job_id, key)
 
-    def _submit_job(self, cmd: CommandType, exec_config: ExecutorConfigType) -> str:
+    def _submit_job(
+        self, 
+        key: TaskInstanceKeyType,
+        cmd: CommandType, queue: str,
+        exec_config: ExecutorConfigType
+    ) -> str:
         """
         The command and executor config will be placed in the container-override section of the JSON request, before
-        calling Boto3's "run_task" function.
+        calling Boto3's "submit_job" function.
         """
-        submit_job_api = deepcopy(self.submit_job_kwargs)
-        submit_job_api['containerOverrides'].update(exec_config)
-        submit_job_api['containerOverrides']['command'] = cmd
+        submit_job_api = self._submit_job_kwargs(key, cmd, queue, exec_config)
         boto_run_task = self.batch.submit_job(**submit_job_api)
         try:
             submit_job_response = BatchSubmitJobResponseSchema().load(boto_run_task)
@@ -148,6 +151,25 @@ class AwsBatchExecutor(BaseExecutor):
                 )
             )
         return submit_job_response['job_id']
+
+    def _submit_job_kwargs(
+        self,
+        key: TaskInstanceKeyType,
+        cmd: CommandType,
+        queue: str, exec_config: ExecutorConfigType
+    ) -> dict:
+        """
+        This modifies the standard kwargs to be specific to this task by overriding the airflow command and updating
+        the container overrides.
+
+        One last chance to modify Boto3's "submit_job" kwarg params before it gets passed into the Boto3 client.
+        For the latest kwarg parameters:
+        .. seealso:: https://docs.aws.amazon.com/batch/latest/APIReference/API_SubmitJob.html
+        """
+        submit_job_api = deepcopy(self.submit_job_kwargs)
+        submit_job_api['containerOverrides'].update(exec_config)
+        submit_job_api['containerOverrides']['command'] = cmd
+        return submit_job_api
 
     def end(self, heartbeat_interval=10):
         """
