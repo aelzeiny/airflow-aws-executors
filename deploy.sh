@@ -1,6 +1,6 @@
 rm -rf dist
-rm -rf apache_airflow_ecs_fargate_executor.egg-info
+rm -rf airflow_aws_executors.egg-info
 python setup.py sdist
-pip uninstall apache-airflow-ecs-fargate-executor -y
+pip uninstall airflow-aws-executors -y
 pip install -e .
 twine upload dist/* --verbose
