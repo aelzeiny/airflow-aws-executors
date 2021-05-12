@@ -4,6 +4,7 @@ from unittest import TestCase, mock
 from airflow_aws_executors.batch_executor import (
     AwsBatchExecutor, BatchJobDetailSchema, BatchJob, BatchJobCollection
 )
+from airflow.models import TaskInstance
 from airflow.utils.state import State
 
 from .botocore_helper import get_botocore_model, assert_botocore_call
@@ -104,14 +105,17 @@ class TestAwsBatchExecutor(TestCase):
         # task is stored in active worker
         self.assertEqual(1, len(self.executor.active_workers))
 
+        # job_id is stored in executor event buffer
+        self.assertEqual((State.QUEUED, 'ABC'), self.executor.event_buffer[airflow_key])
+
     @mock.patch('airflow.executors.base_executor.BaseExecutor.fail')
     @mock.patch('airflow.executors.base_executor.BaseExecutor.success')
     def test_sync(self, success_mock, fail_mock):
         """Test synch from end-to-end. Mocks a successful job & makes sure it's removed"""
-        after_sync_reponse = self.__mock_sync()
+        after_sync_response = self.__mock_sync()
 
         # sanity check that container's status code is mocked to success
-        loaded_batch_job = BatchJobDetailSchema().load(after_sync_reponse)
+        loaded_batch_job = BatchJobDetailSchema().load(after_sync_response)
         self.assertEqual(State.SUCCESS, loaded_batch_job.get_job_state())
 
         self.executor.sync()
@@ -130,11 +134,11 @@ class TestAwsBatchExecutor(TestCase):
     @mock.patch('airflow.executors.base_executor.BaseExecutor.success')
     def test_failed_sync(self, success_mock, fail_mock):
         """Test failure states"""
-        after_sync_reponse = self.__mock_sync()
+        after_sync_response = self.__mock_sync()
 
         # set container's status code to failure & sanity-check
-        after_sync_reponse['status'] = 'FAILED'
-        self.assertEqual(State.FAILED, BatchJobDetailSchema().load(after_sync_reponse).get_job_state())
+        after_sync_response['status'] = 'FAILED'
+        self.assertEqual(State.FAILED, BatchJobDetailSchema().load(after_sync_response).get_job_state())
         self.executor.sync()
 
         # ensure that run_task is called correctly as defined by Botocore docs
@@ -157,6 +161,47 @@ class TestAwsBatchExecutor(TestCase):
 
         self.assertTrue(self.executor.batch.terminate_job.called)
         self.assert_botocore_call('TerminateJob', *self.executor.batch.terminate_job.call_args)
+
+    def test_terminate_with_task_adoption(self):
+        """Test that executor does not shut down active Batch jobs when 'adopt_task_instances' is set to True"""
+        self.executor.adopt_task_instances = True
+        self.executor.terminate()
+
+        # jobs are not terminated
+        self.assertFalse(self.executor.batch.terminate_job.called)
+
+    def test_try_adopt_task_instances(self):
+        """Test that executor can adopt orphaned task instances from a SchedulerJob shutdown event"""
+        self.executor.adopt_task_instances = True
+
+        orphaned_tasks = [
+            mock.Mock(TaskInstance),
+            mock.Mock(TaskInstance),
+            mock.Mock(TaskInstance),
+        ]
+        orphaned_tasks[0].external_executor_id = None  # One orphaned task has no external_executor_id
+        not_adopted_tasks = self.executor.try_adopt_task_instances(orphaned_tasks)
+
+        # adopted tasks are stored in active workers
+        self.assertEqual(len(orphaned_tasks) - 1, len(self.executor.active_workers))
+
+        # one task is unable to be adopted
+        self.assertEqual(1, len(not_adopted_tasks))
+
+    def test_try_adopt_task_instances_disabled(self):
+        """Test that executor won't adopt orphaned task instances if 'adopt_task_instances' is set to False (default)"""
+        orphaned_tasks = [
+            mock.Mock(TaskInstance),
+            mock.Mock(TaskInstance),
+            mock.Mock(TaskInstance),
+        ]
+        not_adopted_tasks = self.executor.try_adopt_task_instances(orphaned_tasks)
+
+        # no orphaned tasks are stored in active workers
+        self.assertEqual(0, len(self.executor.active_workers))
+
+        # all tasks are unable to be adopted
+        self.assertEqual(len(orphaned_tasks), len(not_adopted_tasks))
 
     def test_end(self):
         """The end() function should call sync 3 times, and the task should fail on the 3rd call"""
