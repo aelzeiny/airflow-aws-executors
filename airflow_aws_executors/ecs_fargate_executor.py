@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import boto3
 from airflow.configuration import conf
 from airflow.executors.base_executor import BaseExecutor
+from airflow.models import TaskInstance
 from airflow.utils.module_loading import import_string
 from airflow.utils.state import State
 from marshmallow import EXCLUDE, Schema, ValidationError, fields, post_load
@@ -93,6 +94,7 @@ class AwsEcsFargateExecutor(BaseExecutor):
         self.pending_tasks: Optional[deque] = None
         self.ecs = None
         self.run_task_kwargs = None
+        self.adopt_task_instances = None
 
     def start(self):
         """Initialize Boto3 ECS Client, and other internal variables"""
@@ -103,6 +105,7 @@ class AwsEcsFargateExecutor(BaseExecutor):
         self.pending_tasks = deque()
         self.ecs = boto3.client('ecs', region_name=region)  # noqa
         self.run_task_kwargs = self._load_run_kwargs()
+        self.adopt_task_instances = conf.getboolean('ecs_fargate', 'adopt_task_instances', fallback=False)
 
     def sync(self):
         self.sync_running_tasks()
@@ -207,6 +210,8 @@ class AwsEcsFargateExecutor(BaseExecutor):
             else:
                 task = run_task_response['tasks'][0]
                 self.active_workers.add_task(task, task_key, queue, cmd, exec_config)
+                # Add fargate task arn to executor event buffer, which gets saved in TaskInstance.external_executor_id
+                self.event_buffer[task_key] = (State.QUEUED, task.task_arn)
         if failure_reasons:
             self.log.debug('Pending tasks failed to launch for the following reasons: %s. Will retry later.',
                            dict(failure_reasons))
@@ -267,7 +272,11 @@ class AwsEcsFargateExecutor(BaseExecutor):
     def terminate(self):
         """
         Kill all ECS processes by calling Boto3's StopTask API.
+        Do not kill ECS processes if [ecs_fargate].adopt_task_instances option is set to True
         """
+        if self.adopt_task_instances:
+            pass
+
         for arn in self.active_workers.get_all_arns():
             self.ecs.stop_task(
                 cluster=self.cluster,
@@ -275,6 +284,44 @@ class AwsEcsFargateExecutor(BaseExecutor):
                 reason='Airflow Executor received a SIGTERM'
             )
         self.end()
+
+    def try_adopt_task_instances(self, tis: List[TaskInstance]) -> List[TaskInstance]:
+        """
+        If [ecs_fargate].adopt_task_instances option is set to True, try to adopt running task instances that have been
+        abandoned by a SchedulerJob dying.
+        These tasks instances should have a corresponding ECS process which can be adopted by the unique task arn.
+
+        Anything that is not adopted will be cleared by the scheduler (and then become eligible for re-scheduling)
+
+        :return: any TaskInstances that were unable to be adopted
+        :rtype: list[airflow.models.TaskInstance]
+        """
+        if not self.adopt_task_instances:
+            # Do not try to adopt task instances, return all orphaned tasks for clearing
+            return tis
+
+        adopted_tis: List[TaskInstance] = []
+
+        task_arns = [ti.external_executor_id for ti in tis if ti.external_executor_id]
+        if task_arns:
+            task_descriptions = self.__describe_tasks(task_arns).get('tasks', [])
+
+            for task in task_descriptions:
+                ti = [ti for ti in tis if ti.external_executor_id == task.task_arn][0]
+                self.active_workers.add_task(task, ti.key, ti.queue, ti.command_as_list(), ti.executor_config)
+                adopted_tis.append(ti)
+
+        if adopted_tis:
+            tasks = [f'{task} in state {task.state}' for task in adopted_tis]
+            task_instance_str = '\n\t'.join(tasks)
+            self.log.info(
+                'Adopted the following %d tasks from a dead executor:\n\t%s',
+                len(adopted_tis),
+                task_instance_str,
+            )
+
+        not_adopted_tis = [ti for ti in tis if ti not in adopted_tis]
+        return not_adopted_tis
 
     def _load_run_kwargs(self) -> dict:
         run_kwargs = import_string(
