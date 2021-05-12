@@ -146,6 +146,12 @@ task = PythonOperator(
     To change the parameters used to run a task in Batch, the user can overwrite the path to
     specify another python dictionary. More documentation can be found in the `Extensibility` section below.
     * **default**: airflow_aws_executors.conf.BATCH_SUBMIT_JOB_KWARGS
+* `adopt_task_instances`
+    * **description**: Boolean flag. If set to True, the executor will try to adopt orphaned task instances from a
+    SchedulerJob shutdown event (for example when a scheduler container is re-deployed or terminated).
+    If set to False (default), the executor will terminate all active AWS Batch Jobs when the scheduler shuts down. 
+    More documentation can be found in the [airflow docs](https://airflow.apache.org/docs/apache-airflow/stable/scheduler.html#scheduler-tuneables).
+    * **default**: False
 #### ECS & FARGATE
 `[ecs_fargate]`
 * `region` 
@@ -181,6 +187,12 @@ task = PythonOperator(
     To change the parameters used to run a task in FARGATE or ECS, the user can overwrite the path to
     specify another python dictionary. More documentation can be found in the `Extensibility` section below.
     * **default**: airflow_aws_executors.conf.ECS_FARGATE_RUN_TASK_KWARGS
+* `adopt_task_instances`
+  * **description**: Boolean flag. If set to True, the executor will try to adopt orphaned task instances from a
+    SchedulerJob shutdown event (for example when a scheduler container is re-deployed or terminated).
+    If set to False (default), the executor will terminate all active ECS Tasks when the scheduler shuts down.
+    More documentation can be found in the [airflow docs](https://airflow.apache.org/docs/apache-airflow/stable/scheduler.html#scheduler-tuneables).
+  * **default**: False
 
 
 *NOTE: Modify airflow.cfg or export environmental variables. For example:* 
