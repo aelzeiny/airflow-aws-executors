@@ -1,5 +1,6 @@
 dist: xenial
 language: python
+dist: focal
 python:
   - "3.6"      # current default Python on Travis CI
   - "3.7"
