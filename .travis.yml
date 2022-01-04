@@ -2,8 +2,6 @@ language: python
 dist: xenial
 python:
   - "3.6"      # current default Python on Travis CI
-  - "3.7"
-  - "3.8"
 install:
   - pip install apache-airflow boto3 pylint isort marshmallow
 env:
@@ -12,3 +10,6 @@ script:
   - pylint --fail-under=9 ./airflow_aws_executors
   - isort -c -rc ./airflow_aws_executors
   - pytest
+addons:
+  apt_packages:
+    - sqlite3
