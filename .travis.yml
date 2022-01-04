@@ -1,9 +1,9 @@
 language: python
 dist: trusty
 python:
-  - "3.6"      # current default Pgiython on Travis CI
+  - "3.9"      # current default Pgiython on Travis CI
 before_install:
-  - pip install -U pip
+  - pip install -U pip pytest
 install:
   - pip install apache-airflow boto3 pylint isort marshmallow
 env:
