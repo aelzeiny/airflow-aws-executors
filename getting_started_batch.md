@@ -48,38 +48,48 @@ Build this image and upload it to a private repository. You may want to use Dock
     the container. *BE SURE YOU HAVE THIS*!  It's heavily important that commands like 
     `["airflow", "run", <dag_id>, <task_id>, <execution_date>]` are accepted by your container's entrypoint script.
  
- 4. Run through the AWS Batch Creation Wizard on AWS Console. The executor does not have any
+4. Run through the AWS Batch Creation Wizard on AWS Console. The executor does not have any
  prerequisites to how you create your Job Queue or Compute Environment. Go nuts; have at it. I'll refer you to the 
  [AWS Docs' Getting Started with Batch](https://docs.aws.amazon.com/batch/latest/userguide/Batch_GetStarted.html).
  You will need to assign the right IAM roles for the remote S3 logging. 
  Also, your dynamically provisioned EC2 instances do not need to be connected to the public internet, 
  private subnets in private VPCs are encouraged. However, be sure that all instances has access to your Airflow MetaDB.
  
- 5. When creating a Job Definition choose the 'container' type and point to the private repo. The 'commands' array is
+5. When creating a Job Definition choose the 'container' type and point to the private repo. The 'commands' array is
  optional on the task-definition level. At runtime, Airflow commands will be injected here by the AwsBatchExecutor!
  
- 6. Let's go back to that machine in step #1 that's running the Scheduler. We'll use the same docker container as 
+6. Let's go back to that machine in step #1 that's running the Scheduler. We'll use the same docker container as 
  before; except we'll do something like `docker run ... airflow webserver` and `docker run ... airflow scheduler`. 
  Here are the minimum IAM roles that the executor needs to launch tasks, feel free to tighten the resources around the 
  job-queues and compute environments that you'll use.
-    ```json
-    {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Sid": "AirflowBatchRole",
-                "Effect": "Allow",
-                "Action": [
-                    "batch:SubmitJob",
-                    "batch:DescribeJobs",
-                    "batch:TerminateJob"
-                ],
-                "Resource": "*"
-            }
-        ]
-    }
-    ```
- 7. You're done. Configure & launch your scheduler. However, maybe you did something real funky with your AWS Batch compute
+   ```json
+   {
+       "Version": "2012-10-17",
+       "Statement": [
+           {
+               "Sid": "AirflowBatchRole",
+               "Effect": "Allow",
+               "Action": [
+                   "batch:SubmitJob",
+                   "batch:DescribeJobs",
+                   "batch:TerminateJob"
+               ],
+               "Resource": "*"
+           }
+       ]
+   }
+   ```
+7. Let's test your AMI configuration before we launch the webserver or scheduler. 
+[Copy & Run this python file somewhere on the machine that has your scheduler](batch_ami_helper.py).
+To simplify, this file will make sure that your scheduler and your cluster have correct AMI permissions. Your scheduler
+should be able to launch, describe, plus terminate Batch jobs, and connect to your Airflow Meta DB of choice. 
+Meanwhile, your cluster should have the ability to pull the docker container, and also 
+connect to your Airflow MetaDB of choice.
+```bash
+python3 -m unittest batch_ami_helper.py
+```
+
+9. You're done. Configure & launch your scheduler. However, maybe you did something real funky with your AWS Batch compute
  environment. The good news is that you have full control over how the executor submits jobs. 
  See the [#Extensibility](./readme.md) section in the readme. Thank you for taking the time to set this up!
 
