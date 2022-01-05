@@ -1,5 +1,7 @@
 # Apache Airflow: Native AWS Executors
-[![Build Status](https://travis-ci.com/aelzeiny/airflow-aws-executors.svg?branch=master)](https://travis-ci.com/aelzeiny/airflow-aws-executors)
+
+![Build Status](https://github.com/aelzeiny/airflow-aws-executors/actions/workflows/main.yml/badge.svg)
+
 
 This is an AWS Executor that delegates every task to a scheduled container on either AWS Batch, AWS Fargate, or AWS ECS.
 
@@ -11,37 +13,6 @@ pip install airflow-aws-executors
 For `AWS Batch`: [Getting Started with AWS Batch ReadMe](getting_started_batch.md)
 
 For `AWS ECS/Fargate`: [Getting Started with AWS ECS/Fargate ReadMe](getting_started_ecs_fargate.md)
-
-
-## How Airflow Executors Work
-Every time Apache Airflow wants to run a task, the Scheduler generates a shell command that needs to be executed **somewhere**. 
-Under the hood this command will run Python code, and it looks something like this: 
-```bash
-airflow run <DAG_ID> <TASK_ID> <EXECUTION_DATE>
-```
-What people refer to as the Executor, is actually an API and not a thread/process. The process that runs is the Airflow
-Scheduler, and the Executor API is part of that process. When the Scheduler process generates the shell command above, 
-it is the executor that decides how this is ran. Here's how what different Executors handle this command: 
-* **LocalExecutor**
-    * `execute_async()` Uses Python's Subprocess library to spin up a new process with the shell command
-    * `sync()` Monitors exit code on every heartbeat
-* **CeleryExecutor**
-    * `execute_async()` Uses the Celery library to put this shell command in a message queue
-    * `sync()` Monitors the Celery Backend to determine task completion
-* **KubernetesExecutor**
-    * `execute_async()` Launches K8 Pod with the shell command
-    * `sync()` Monitors K8 Pod
-    
-So, how do these executors work? Well, on the highest level, it just calls Boto3 APIs to schedule containers onto 
-compute clusters.
-
-* **AwsEcsFargateExecutor**
-    * `execute_async()` Uses the Boto3 library to call [ECS.run_task()][run_task], and launches a container with the shell command onto a EC2 or Serverless cluster
-    * `sync()` Uses the Boto3 library to call ECS.describe_tasks() to monitor the exit-code of the Airflow Container.
-* **AwsBatchExecutor**
-    * `executor_async()`Uses the Boto3 library to call [Batch.submit_job()][submit_job], and puts this message in a job-queue
-    * `sync()` Uses the Boto3 library to call Batch.describe_jobs() to monitor the status of the Airflow Container
-
 
 ## But Why?
 There's so much to unpack here.
@@ -271,7 +242,7 @@ Please file a ticket in GitHub for issues. Be persistent and be polite.
 
 
 ## Contribution & Development
-This repository uses Travis-CI for CI, pytest for Integration/Unit tests, and isort+pylint for code-style. 
+This repository uses Github Actions for CI, pytest for Integration/Unit tests, and isort+pylint for code-style. 
 Pythonic Type-Hinting is encouraged. From the bottom of my heart, thank you to everyone who has contributed 
 to making Airflow better.
 
