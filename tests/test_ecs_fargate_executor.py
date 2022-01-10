@@ -4,6 +4,7 @@ from unittest import TestCase, mock
 from airflow_aws_executors.ecs_fargate_executor import (
     AwsEcsFargateExecutor, BotoTaskSchema, EcsFargateTask, EcsFargateTaskCollection
 )
+from airflow.models import TaskInstance
 from airflow.utils.state import State
 
 from .botocore_helper import get_botocore_model, assert_botocore_call
@@ -184,6 +185,9 @@ class TestAwsEcsFargateExecutor(TestCase):
         self.assertEqual(1, len(self.executor.active_workers))
         self.assertIn(self.executor.active_workers.task_by_key(airflow_key).task_arn, '001')
 
+        # task_arn is stored in executor event buffer
+        self.assertEqual((State.QUEUED, '001'), self.executor.event_buffer[airflow_key])
+
     def test_failed_execute_api(self):
         """Test what happens when FARGATE refuses to execute a task"""
         self.executor.ecs.run_task.return_value = {
@@ -215,7 +219,7 @@ class TestAwsEcsFargateExecutor(TestCase):
 
         self.executor.sync_running_tasks()
 
-        # ensure that run_task is called correctly as defined by Botocore docs
+        # ensure that describe_tasks is called correctly as defined by Botocore docs
         self.executor.ecs.describe_tasks.assert_called_once()
         self.assert_botocore_call('DescribeTasks', *self.executor.ecs.describe_tasks.call_args)
 
@@ -236,7 +240,7 @@ class TestAwsEcsFargateExecutor(TestCase):
         self.assertEqual(State.FAILED, BotoTaskSchema().load(after_fargate_json).get_task_state())
         self.executor.sync()
 
-        # ensure that run_task is called correctly as defined by Botocore docs
+        # ensure that describe_tasks is called correctly as defined by Botocore docs
         self.executor.ecs.describe_tasks.assert_called_once()
         self.assert_botocore_call('DescribeTasks', *self.executor.ecs.describe_tasks.call_args)
 
@@ -263,7 +267,7 @@ class TestAwsEcsFargateExecutor(TestCase):
         # Call Sync 3 times with failures
         for check_count in range(AwsEcsFargateExecutor.MAX_FAILURE_CHECKS):
             self.executor.sync_running_tasks()
-            # ensure that run_task is called correctly as defined by Botocore docs
+            # ensure that describe_tasks is called correctly as defined by Botocore docs
             self.assertEqual(self.executor.ecs.describe_tasks.call_count, check_count + 1)
             self.assert_botocore_call('DescribeTasks', *self.executor.ecs.describe_tasks.call_args)
 
@@ -290,6 +294,74 @@ class TestAwsEcsFargateExecutor(TestCase):
 
         self.assertTrue(self.executor.ecs.stop_task.called)
         self.assert_botocore_call('StopTask', *self.executor.ecs.stop_task.call_args)
+
+    def test_terminate_with_task_adoption(self):
+        """Test that executor does not shut down active ECS tasks when 'adopt_task_instances' is set to True"""
+        self.executor.adopt_task_instances = True
+        self.executor.terminate()
+
+        # tasks are not terminated
+        self.assertFalse(self.executor.ecs.stop_task.called)
+
+    def test_try_adopt_task_instances(self):
+        """Test that executor can adopt orphaned task instances from a SchedulerJob shutdown event"""
+        self.executor.adopt_task_instances = True
+
+        self.executor.ecs.describe_tasks.return_value = {
+            'tasks': [
+                {
+                    'taskArn': '001',
+                    'lastStatus': 'RUNNING',
+                    'desiredStatus': 'RUNNING',
+                    'containers': [{'name': 'some-ecs-container'}]
+                },
+                {
+                    'taskArn': '002',
+                    'lastStatus': 'RUNNING',
+                    'desiredStatus': 'RUNNING',
+                    'containers': [{'name': 'another-ecs-container'}]
+                }
+            ],
+            'failures': []
+        }
+
+        orphaned_tasks = [
+            mock.Mock(TaskInstance),
+            mock.Mock(TaskInstance),
+            mock.Mock(TaskInstance),
+        ]
+        orphaned_tasks[0].external_executor_id = '001'  # Matches a running task_arn
+        orphaned_tasks[1].external_executor_id = '002'  # Matches a running task_arn
+        orphaned_tasks[2].external_executor_id = None  # One orphaned task has no external_executor_id
+        not_adopted_tasks = self.executor.try_adopt_task_instances(orphaned_tasks)
+
+        # ensure that describe_tasks is called correctly as defined by Botocore docs
+        self.executor.ecs.describe_tasks.assert_called_once()
+        self.assert_botocore_call('DescribeTasks', *self.executor.ecs.describe_tasks.call_args)
+
+        # adopted tasks are stored in active workers
+        self.assertEqual(len(orphaned_tasks) - 1, len(self.executor.active_workers))
+
+        # one task is unable to be adopted
+        self.assertEqual(1, len(not_adopted_tasks))
+
+    def test_try_adopt_task_instances_disabled(self):
+        """Test that executor won't adopt orphaned task instances if 'adopt_task_instances' is set to False (default)"""
+        orphaned_tasks = [
+            mock.Mock(TaskInstance),
+            mock.Mock(TaskInstance),
+            mock.Mock(TaskInstance),
+        ]
+        not_adopted_tasks = self.executor.try_adopt_task_instances(orphaned_tasks)
+
+        # ensure that describe_tasks is not called
+        self.executor.ecs.describe_tasks.assert_not_called()
+
+        # no orphaned tasks are stored in active workers
+        self.assertEqual(0, len(self.executor.active_workers))
+
+        # all tasks are unable to be adopted
+        self.assertEqual(len(orphaned_tasks), len(not_adopted_tasks))
 
     def assert_botocore_call(self, method_name, args, kwargs):
         assert_botocore_call(self.ecs_model, method_name, args, kwargs)

@@ -1,4 +1,4 @@
-"""AWS Batch Executor. Each Airflow task gets deligated out to an AWS Batch Job"""
+"""AWS Batch Executor. Each Airflow task gets delegated out to an AWS Batch Job"""
 
 import time
 from copy import deepcopy
@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import boto3
 from airflow.configuration import conf
 from airflow.executors.base_executor import BaseExecutor
+from airflow.models import TaskInstance
 from airflow.utils.module_loading import import_string
 from airflow.utils.state import State
 from marshmallow import EXCLUDE, Schema, ValidationError, fields, post_load
@@ -73,6 +74,7 @@ class AwsBatchExecutor(BaseExecutor):
         self.active_workers: Optional[BatchJobCollection] = None
         self.batch = None
         self.submit_job_kwargs = None
+        self.adopt_task_instances = None
 
     def start(self):
         """Initialize Boto3 Batch Client, and other internal variables"""
@@ -80,6 +82,7 @@ class AwsBatchExecutor(BaseExecutor):
         self.active_workers = BatchJobCollection()
         self.batch = boto3.client('batch', region_name=region)
         self.submit_job_kwargs = self._load_submit_kwargs()
+        self.adopt_task_instances = conf.getboolean('batch', 'adopt_task_instances', fallback=False)
 
     def sync(self):
         """Checks and update state on all running tasks"""
@@ -127,6 +130,9 @@ class AwsBatchExecutor(BaseExecutor):
             raise ValueError('Executor Config should never override "command"')
         job_id = self._submit_job(key, command, queue, executor_config or {})
         self.active_workers.add_job(job_id, key)
+
+        # Add batch job_id to executor event buffer, which gets saved in TaskInstance.external_executor_id
+        self.event_buffer[key] = (State.QUEUED, job_id)
 
     def _submit_job(
         self, 
@@ -184,13 +190,53 @@ class AwsBatchExecutor(BaseExecutor):
     def terminate(self):
         """
         Kill all Batch Jobs by calling Boto3's TerminateJob API.
+        Do not kill Batch Jobs if [batch].adopt_task_instances option is set to True
         """
+        if self.adopt_task_instances:
+            pass
+
         for job_id in self.active_workers.get_all_jobs():
             self.batch.terminate_job(
                 jobId=job_id,
                 reason='Airflow Executor received a SIGTERM'
             )
         self.end()
+
+    def try_adopt_task_instances(self, tis: List[TaskInstance]) -> List[TaskInstance]:
+        """
+        If [batch].adopt_task_instances option is set to True, try to adopt running task instances that have been
+        abandoned by a SchedulerJob dying.
+        These tasks instances should have a corresponding AWS Batch Job which can be adopted by the unique job_id.
+
+        Anything that is not adopted will be cleared by the scheduler (and then become eligible for re-scheduling)
+
+        :return: any TaskInstances that were unable to be adopted
+        :rtype: list[airflow.models.TaskInstance]
+        """
+        if not self.adopt_task_instances:
+            # Do not try to adopt task instances, return all orphaned tasks for clearing
+            return tis
+
+        adopted_tis: List[TaskInstance] = []
+        not_adopted_tis: List[TaskInstance] = []
+
+        for ti in tis:
+            if ti.external_executor_id is not None:
+                self.active_workers.add_job(ti.external_executor_id, ti.key)
+                adopted_tis.append(ti)
+            else:
+                not_adopted_tis.append(ti)
+
+        if adopted_tis:
+            tasks = [f'{task} in state {task.state}' for task in adopted_tis]
+            task_instance_str = '\n\t'.join(tasks)
+            self.log.info(
+                'Adopted the following %d tasks from a dead executor:\n\t%s',
+                len(adopted_tis),
+                task_instance_str,
+            )
+
+        return not_adopted_tis
 
     @staticmethod
     def _load_submit_kwargs() -> dict:
