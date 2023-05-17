@@ -47,6 +47,8 @@ Build this image and upload it to a private repository. You may want to use Dock
     container! Meaning that the command "docker run [image] airflow version" will execute "airflow version" locally on 
     the container. *BE SURE YOU HAVE THIS*!  It's heavily important that commands like 
     `["airflow", "run", <dag_id>, <task_id>, <execution_date>]` are accepted by your container's entrypoint script.
+    
+    **NOTE: Airflow's official Docker image supports running arbitrary "airflow" commands (check the [entrypoint](https://github.com/apache/airflow/blob/main/scripts/docker/entrypoint_prod.sh)).**
  
 4. Run through the AWS Batch Creation Wizard on AWS Console. The executor does not have any
  prerequisites to how you create your Job Queue or Compute Environment. Go nuts; have at it. I'll refer you to the 
