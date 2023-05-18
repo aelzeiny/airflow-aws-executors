@@ -141,12 +141,15 @@ task = PythonOperator(
     * **default**: LATEST
 * `assign_public_ip` 
     * **description**: Assign public ip. [For more info see Boto3][run_task].
+    * **mandatory**: `assign_public_ip`, `security_groups`, and `subnets` together constitute the network configurations passed to the `run_task` api call
 * `security_groups` 
     * **description**: Security group ids for task to run in (comma-separated). [For more info see Boto3][run_task].
     * **example**: sg-AAA,sg-BBB
+    * **mandatory**: `assign_public_ip`, `security_groups`, and `subnets` together constitute the network configurations passed to the `run_task` api call 
 * `subnets` 
     * **description**: Subnets for task to run in (comma-separated). [For more info see Boto3][run_task].
     * **example**: subnet-XXXXXXXX,subnet-YYYYYYYY
+    * **mandatory**: `assign_public_ip`, `security_groups`, and `subnets` together constitute the network configurations passed to the `run_task` api call
 * `run_task_kwargs`
     * **description**: This is the default configuration for calling the ECS [run_task function][run_task] API.
     To change the parameters used to run a task in FARGATE or ECS, the user can overwrite the path to
